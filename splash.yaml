@@ -1,0 +1,13 @@
+flutter_native_splash:
+  color: "#ffffff"
+  color_dark: "#272727"
+  image: "assets/logos/level-up-500.png"
+  image_dark: "assets/logos/level-up-500.png"
+
+  android_12:
+    color: "#ffffff"
+    color_dark: "#272727"
+    image: "assets/logos/level-up-500.png"
+    image_dark: "assets/logos/level-up-500.png"
+  
+  web: False
