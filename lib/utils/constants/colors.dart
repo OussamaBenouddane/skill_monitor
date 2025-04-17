@@ -55,4 +55,7 @@ class TColors {
   static const Color lightGrey = Color(0xFFf9f9f9);
   static const Color softGrey = Color(0xFFf4f4f4);
   static const Color white = Color(0xFFFFFFFF);
+
+  static const Color trackColor = Color.fromARGB(255, 155, 39, 198);
+  static const Color progressBarColor = Color.fromARGB(255, 236, 90, 209);
 }

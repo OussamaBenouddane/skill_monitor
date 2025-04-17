@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skill_monitor/utils/constants/colors.dart';
 
 class TAppBarTheme {
   TAppBarTheme._();
@@ -7,7 +8,7 @@ class TAppBarTheme {
     elevation: 0,
     centerTitle: true,
     scrolledUnderElevation: 0,
-    backgroundColor: Colors.transparent,
+    backgroundColor: TColors.accent,
     surfaceTintColor: Colors.transparent,
     iconTheme: IconThemeData(color: Colors.black, size: 24),
     actionsIconTheme: IconThemeData(color: Colors.black, size: 24),
