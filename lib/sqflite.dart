@@ -9,55 +9,57 @@ class SqlDb {
     return _db;
   }
 
-  initialDb() async {
+  Future<Database> initialDb() async {
     String dataBasePath = await getDatabasesPath();
     String path = join(dataBasePath, "skills.db");
-    Database myDb = await openDatabase(path, onCreate: _onCreate);
+
+    Database myDb = await openDatabase(
+      path,
+      version: 1, // ✅ Required when using onCreate
+      onCreate: _onCreate,
+    );
+
     return myDb;
   }
 
-  _onCreate(Database db, int version) async {
+  Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-    CREATE TABLE "skills"(
-      "id" PRIMARY KEY AUTOINCREMENT,
-      "skill" TEXT NOT NULL,
-      "score" INTEGER NOT NULL
-    ),
-    CREATE TABLE "habits"(
-      "id" PRIMARY KEY AUTOINCREMENT,
-      "habit" TEXT NOT NULL,
-      "value" INTEGER NOT NULL
-    ),
-    CREATE TABLE "condition"(
-      "skill_id" INTEGER NOT NULL,
-      "habit_id" INTEGER NOT NULL
-    )
+      CREATE TABLE skills(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill TEXT NOT NULL,
+        score INTEGER NOT NULL DEFAULT 0,
+        level INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE habits(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id INTEGER NOT NULL,
+        habit TEXT NOT NULL,
+        value INTEGER NOT NULL,
+        FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
+      )
     ''');
   }
 
-  readData(String sql) async {
+  Future<List<Map>> readData(String sql) async {
     Database? myDb = await db;
-    List<Map> response = await myDb!.rawQuery(sql); //SELECT
-    return response;
+    return await myDb!.rawQuery(sql);
   }
 
-  insertData(String sql) async {
+  Future<int> insertData(String sql) async {
     Database? myDb = await db;
-    int response = await myDb!.rawInsert(sql); //INSERT
-    return response;
+    return await myDb!.rawInsert(sql);
   }
 
-  updateData(String sql) async {
+  Future<int> updateData(String sql) async {
     Database? myDb = await db;
-    int response = await myDb!.rawUpdate(sql); // Update
-    return response;
+    return await myDb!.rawUpdate(sql);
   }
 
-  deleteData(String sql) async {
+  Future<int> deleteData(String sql) async {
     Database? myDb = await db;
-    int response = await myDb!.rawDelete(sql); // Delete
-    return response;
+    return await myDb!.rawDelete(sql);
   }
-
-
 }

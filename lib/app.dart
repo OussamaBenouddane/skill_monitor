@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           routes: {
-            '/add_skill': (context) => SkillSetupScreen(),
+            '/add_skill': (context) => const SkillSetupScreen(),
           },
           home: const Home(),
           debugShowCheckedModeBanner: false,

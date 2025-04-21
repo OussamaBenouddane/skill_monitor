@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:skill_monitor/sqflite.dart';
 
 class SkillSetupScreen extends StatefulWidget {
   final String? existingSkillName;
   final List<Map<String, dynamic>>? existingHabits;
+  final int? id;
 
-  const SkillSetupScreen({this.existingSkillName, this.existingHabits, super.key});
+  const SkillSetupScreen({
+    this.existingSkillName,
+    this.existingHabits,
+    this.id,
+    super.key,
+  });
 
   @override
   State<SkillSetupScreen> createState() => _SkillSetupScreenState();
@@ -15,13 +22,16 @@ class SkillSetupScreen extends StatefulWidget {
 class _SkillSetupScreenState extends State<SkillSetupScreen> {
   final TextEditingController _skillNameController = TextEditingController();
   final RxBool isDarkMode = Get.isDarkMode.obs;
+  final SqlDb sqlDb = SqlDb();
 
   List<HabitEntry> _habits = [HabitEntry()];
   bool get isEditing => widget.existingSkillName != null;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    print(isEditing);
     if (isEditing) {
       _skillNameController.text = widget.existingSkillName!;
       _habits = widget.existingHabits!.map((habit) {
@@ -37,27 +47,68 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
     setState(() => _habits.add(HabitEntry()));
   }
 
-  void _finish() {
+  void _finish() async {
     final skillName = _skillNameController.text.trim();
-    if (skillName.isEmpty || _habits.any((h) => h.nameController.text.trim().isEmpty)) {
+    final nonEmptyHabits =
+        _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
+
+    if (skillName.isEmpty || nonEmptyHabits.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter skill name and all habit names.')),
+        const SnackBar(
+          content: Text('Skill name and at least one habit are required.'),
+        ),
       );
       return;
     }
 
-    final habitData = _habits.map((h) => {
-      'name': h.nameController.text,
-      'value': h.value,
-    }).toList();
+    setState(() => _isSaving = true);
 
-    final data = {
-      'skill': skillName,
-      'habits': habitData,
-    };
+    try {
+      if (isEditing) {
+        // UPDATE existing skill
+        await sqlDb.updateData('''
+          UPDATE skills SET skill = "$skillName" WHERE id = ${widget.id}
+        ''');
 
-    print('${isEditing ? "Edited" : "Created"} Skill: $data');
-    Get.back();
+        // DELETE old habits
+        await sqlDb.deleteData('''
+          DELETE FROM habits WHERE skill_id = ${widget.id}
+        ''');
+
+        // INSERT new habits
+        for (var habit in nonEmptyHabits) {
+          final habitName = habit.nameController.text.trim();
+          final habitValue = habit.value;
+          await sqlDb.insertData('''
+            INSERT INTO habits (skill_id, habit, value)
+            VALUES (${widget.id}, "$habitName", $habitValue)
+          ''');
+        }
+      } else {
+        // INSERT new skill
+        int skillId = await sqlDb.insertData('''
+          INSERT INTO skills (skill) VALUES ("$skillName")
+        ''');
+
+        for (var habit in nonEmptyHabits) {
+          final habitName = habit.nameController.text.trim();
+          final habitValue = habit.value;
+          await sqlDb.insertData('''
+            INSERT INTO habits (skill_id, habit, value)
+            VALUES ($skillId, "$habitName", $habitValue)
+          ''');
+        }
+      }
+
+      Get.back(result: true); // let Home know it should refresh
+    } catch (e) {
+      debugPrint('Error saving skill: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save skill.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -79,48 +130,51 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
             ),
             actions: [
               IconButton(
-                icon: Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
+                icon:
+                    Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
                 onPressed: () => isDarkMode.toggle(),
               )
             ],
           ),
           backgroundColor: isDarkMode.value ? Colors.black : Colors.white,
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: ListView(
-              children: [
-                TextField(
-                  controller: _skillNameController,
-                  style: GoogleFonts.poppins(),
-                  decoration: InputDecoration(
-                    labelText: 'Skill Name',
-                    labelStyle: GoogleFonts.poppins(),
-                    border: const OutlineInputBorder(),
+          body: _isSaving
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ListView(
+                    children: [
+                      TextField(
+                        controller: _skillNameController,
+                        style: GoogleFonts.poppins(),
+                        decoration: InputDecoration(
+                          labelText: 'Skill Name',
+                          labelStyle: GoogleFonts.poppins(),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ..._habits.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final habit = entry.value;
+                        return HabitForm(index: index + 1, habit: habit);
+                      }),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: _addHabit,
+                        icon: const Icon(Icons.add),
+                        label: Text('Add Habit', style: GoogleFonts.poppins()),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _finish,
+                        child: Text(
+                          isEditing ? 'Save Changes' : 'Finish',
+                          style: GoogleFonts.poppins(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                ..._habits.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final habit = entry.value;
-                  return HabitForm(index: index + 1, habit: habit);
-                }),
-                const SizedBox(height: 10),
-                ElevatedButton.icon(
-                  onPressed: _addHabit,
-                  icon: const Icon(Icons.add),
-                  label: Text('Add Habit', style: GoogleFonts.poppins()),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _finish,
-                  child: Text(
-                    isEditing ? 'Save Changes' : 'Finish',
-                    style: GoogleFonts.poppins(),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ));
   }
 }
@@ -141,7 +195,8 @@ class HabitForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Habit $index', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        Text('Habit $index',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         TextField(
           controller: habit.nameController,
