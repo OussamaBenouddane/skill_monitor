@@ -1,27 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class SkillSetupScreen extends StatefulWidget {
+  final String? existingSkillName;
+  final List<Map<String, dynamic>>? existingHabits;
+
+  const SkillSetupScreen({this.existingSkillName, this.existingHabits, super.key});
+
   @override
-  _SkillSetupScreenState createState() => _SkillSetupScreenState();
+  State<SkillSetupScreen> createState() => _SkillSetupScreenState();
 }
 
 class _SkillSetupScreenState extends State<SkillSetupScreen> {
   final TextEditingController _skillNameController = TextEditingController();
+  final RxBool isDarkMode = Get.isDarkMode.obs;
 
   List<HabitEntry> _habits = [HabitEntry()];
+  bool get isEditing => widget.existingSkillName != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      _skillNameController.text = widget.existingSkillName!;
+      _habits = widget.existingHabits!.map((habit) {
+        final entry = HabitEntry();
+        entry.nameController.text = habit['name'];
+        entry.value = habit['value'];
+        return entry;
+      }).toList();
+    }
+  }
 
   void _addHabit() {
-    setState(() {
-      _habits.add(HabitEntry());
-    });
+    setState(() => _habits.add(HabitEntry()));
   }
 
   void _finish() {
-    final skillName = _skillNameController.text;
-    if (skillName.trim().isEmpty || _habits.any((h) => h.nameController.text.trim().isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter skill name and all habit names.'),
-      ));
+    final skillName = _skillNameController.text.trim();
+    if (skillName.isEmpty || _habits.any((h) => h.nameController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter skill name and all habit names.')),
+      );
       return;
     }
 
@@ -35,49 +56,72 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
       'habits': habitData,
     };
 
-    print('Skill setup: $data'); // Just logs for now
+    print('${isEditing ? "Edited" : "Created"} Skill: $data');
+    Get.back();
   }
 
   @override
   void dispose() {
     _skillNameController.dispose();
-    _habits.forEach((h) => h.nameController.dispose());
+    for (var h in _habits) {
+      h.nameController.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Add New Skill')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            TextField(
-              controller: _skillNameController,
-              decoration: InputDecoration(labelText: 'Skill Name'),
+    return Obx(() => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              isEditing ? 'Edit Skill' : 'Add New Skill',
+              style: GoogleFonts.poppins(),
             ),
-            SizedBox(height: 20),
-            ..._habits.asMap().entries.map((entry) {
-              final index = entry.key;
-              final habit = entry.value;
-              return HabitForm(index: index + 1, habit: habit);
-            }),
-            SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: _addHabit,
-              icon: Icon(Icons.add),
-              label: Text('Add Habit'),
+            actions: [
+              IconButton(
+                icon: Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
+                onPressed: () => isDarkMode.toggle(),
+              )
+            ],
+          ),
+          backgroundColor: isDarkMode.value ? Colors.black : Colors.white,
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ListView(
+              children: [
+                TextField(
+                  controller: _skillNameController,
+                  style: GoogleFonts.poppins(),
+                  decoration: InputDecoration(
+                    labelText: 'Skill Name',
+                    labelStyle: GoogleFonts.poppins(),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ..._habits.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final habit = entry.value;
+                  return HabitForm(index: index + 1, habit: habit);
+                }),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  onPressed: _addHabit,
+                  icon: const Icon(Icons.add),
+                  label: Text('Add Habit', style: GoogleFonts.poppins()),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _finish,
+                  child: Text(
+                    isEditing ? 'Save Changes' : 'Finish',
+                    style: GoogleFonts.poppins(),
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _finish,
-              child: Text('Finish'),
-            ),
-          ],
-        ),
-      ),
-    );
+          ),
+        ));
   }
 }
 
@@ -90,21 +134,27 @@ class HabitForm extends StatelessWidget {
   final int index;
   final HabitEntry habit;
 
-  const HabitForm({required this.index, required this.habit});
+  const HabitForm({super.key, required this.index, required this.habit});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Habit $index', style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Habit $index', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
         TextField(
           controller: habit.nameController,
-          decoration: InputDecoration(labelText: 'Habit Name'),
+          style: GoogleFonts.poppins(),
+          decoration: InputDecoration(
+            labelText: 'Habit Name',
+            labelStyle: GoogleFonts.poppins(),
+            border: const OutlineInputBorder(),
+          ),
         ),
         Row(
           children: [
-            Text('Value: ${habit.value}'),
+            Text('Value: ${habit.value}', style: GoogleFonts.poppins()),
             Expanded(
               child: Slider(
                 value: habit.value.toDouble(),
@@ -120,7 +170,7 @@ class HabitForm extends StatelessWidget {
             ),
           ],
         ),
-        Divider(),
+        const Divider(),
       ],
     );
   }
