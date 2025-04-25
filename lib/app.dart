@@ -13,13 +13,15 @@ class MyApp extends StatelessWidget {
     final ThemeController themeController = Get.find();
 
     return Obx(() => GetMaterialApp(
-          themeMode: themeController.isDarkMode.value ? ThemeMode.dark : ThemeMode.light,
+          themeMode: themeController.isDarkMode.value
+              ? ThemeMode.dark
+              : ThemeMode.light,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           routes: {
             '/add_skill': (context) => const SkillSetupScreen(),
           },
-          home: const Home(),
+          home: Home(),
           debugShowCheckedModeBanner: false,
         ));
   }
