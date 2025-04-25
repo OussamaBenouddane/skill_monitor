@@ -61,14 +61,15 @@ class _SkillCardState extends State<SkillCard> {
       child: GestureDetector(
         onTap: widget.isMaxed ? null : widget.onTap,
         child: Card(
-          color: widget.isMaxed ? Colors.grey.shade300 : null,
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 20),
+          elevation: 0,
+          color: widget.isMaxed ? Colors.white : null,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -94,14 +95,14 @@ class _SkillCardState extends State<SkillCard> {
                         ),
                         SleekCircularSlider(
                           appearance: CircularSliderAppearance(
-                            size: 80,
+                            size: 75,
                             customColors: CustomSliderColors(
+                              hideShadow: true,
                               trackColor: widget.isDark
                                   ? Colors.grey.shade700
                                   : Colors.grey.shade300,
-                              progressBarColor: widget.isDark
-                                  ? Colors.blue.shade400
-                                  : Colors.blue.shade600,
+                              dotColor: Colors.blue.shade600,
+                              progressBarColor: Colors.blue.shade600,
                             ),
                             infoProperties: InfoProperties(
                               mainLabelStyle: TextStyle(
@@ -110,7 +111,7 @@ class _SkillCardState extends State<SkillCard> {
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
-                              modifier: (double value) => "Lv ${widget.level}",
+                              modifier: (double value) => "Lvl ${widget.level}",
                             ),
                           ),
                           initialValue:
@@ -124,7 +125,6 @@ class _SkillCardState extends State<SkillCard> {
                     if (widget.isExpanded)
                       Column(
                         children: [
-                          const SizedBox(height: 12),
                           ...widget.habits.map<Widget>((habit) {
                             final habitName =
                                 habit['name'] as String? ?? 'Unnamed Habit';
@@ -132,24 +132,52 @@ class _SkillCardState extends State<SkillCard> {
                                 habit['last_updated'] as String?;
                             final canUpdate = _canUpdateHabit(lastUpdated);
 
-                            return CheckboxListTile(
-                              value: widget.selectedHabits.contains(habitName),
-                              onChanged: canUpdate
-                                  ? (bool? value) =>
-                                      widget.onHabitChanged(habitName, value)
-                                  : null,
-                              title: Text(habitName),
-                              subtitle: !canUpdate
-                                  ? const Text(
-                                      'Updated today, try again tomorrow',
-                                      style: TextStyle(color: Colors.red),
-                                    )
-                                  : null,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
+                            return Row(
+                              children: [
+                                Transform.scale(
+                                  scale:
+                                      1.3, // Adjust scale to make checkbox bigger (e.g., 1.5 for 50% larger)
+                                  child: Checkbox(
+                                    value: canUpdate
+                                        ? widget.selectedHabits
+                                            .contains(habitName)
+                                        : true,
+                                    onChanged: canUpdate
+                                        ? (bool? value) => widget
+                                            .onHabitChanged(habitName, value)
+                                        : null,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    habitName.toUpperCase(),
+                                    style: TextStyle(
+                                      decoration: !canUpdate
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                !canUpdate
+                                    ? Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        child: Text(
+                                          "+ ${habit['value']} XP",
+                                          style: const TextStyle(
+                                              color: Colors.blue,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      )
+                                    : const SizedBox(),
+                              ],
                             );
                           }),
-                          const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed:
                                 widget.isMaxed ? null : widget.onUpdateScore,

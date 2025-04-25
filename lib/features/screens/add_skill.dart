@@ -128,7 +128,6 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
           appBar: AppBar(
             title: Text(
               isEditing ? 'Edit Skill' : 'Add New Skill',
-              style: GoogleFonts.poppins(),
             ),
             actions: [
               IconButton(
@@ -147,7 +146,6 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
                     children: [
                       TextField(
                         controller: _skillNameController,
-                        style: GoogleFonts.poppins(),
                         decoration: InputDecoration(
                           labelText: 'Skill Name',
                           labelStyle: GoogleFonts.poppins(),
@@ -164,14 +162,15 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
                       ElevatedButton.icon(
                         onPressed: _addHabit,
                         icon: const Icon(Icons.add),
-                        label: Text('Add Habit', style: GoogleFonts.poppins()),
+                        label: const Text(
+                          'Add Habit',
+                        ),
                       ),
                       const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: _finish,
                         child: Text(
                           isEditing ? 'Save Changes' : 'Finish',
-                          style: GoogleFonts.poppins(),
                         ),
                       ),
                     ],

@@ -17,7 +17,6 @@ class HabitForm extends StatelessWidget {
         const SizedBox(height: 4),
         TextField(
           controller: habit.nameController,
-          style: GoogleFonts.poppins(),
           decoration: InputDecoration(
             labelText: 'Habit Name',
             labelStyle: GoogleFonts.poppins(),
@@ -26,13 +25,15 @@ class HabitForm extends StatelessWidget {
         ),
         Row(
           children: [
-            Text('Value: ${habit.value}', style: GoogleFonts.poppins()),
+            Text(
+              'Value: ${habit.value}',
+            ),
             Expanded(
               child: Slider(
                 value: habit.value.toDouble(),
-                min: -20,
+                min: 0,
                 max: 20,
-                divisions: 40,
+                divisions: 20,
                 label: habit.value.toString(),
                 onChanged: (newValue) {
                   habit.value = newValue.round();
