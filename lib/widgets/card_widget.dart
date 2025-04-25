@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skill_monitor/sqflite.dart';
+import 'package:skill_monitor/utils/constants/colors.dart';
 import 'package:skill_monitor/utils/constants/system.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
@@ -69,12 +70,42 @@ class _SkillCardState extends State<SkillCard> {
             children: [
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
+                        SleekCircularSlider(
+                          appearance: CircularSliderAppearance(
+                            size: 75,
+                            customColors: CustomSliderColors(
+                              hideShadow: true,
+                              trackColor: widget.isDark
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                              dotColor: TColors.primary,
+                              progressBarColor: TColors.primary,
+                            ),
+                            infoProperties: InfoProperties(
+                              mainLabelStyle: TextStyle(
+                                color:
+                                    widget.isDark ? Colors.white : Colors.black,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              modifier: (double value) => "Lvl ${widget.level}",
+                            ),
+                          ),
+                          initialValue:
+                              widget.score.clamp(0, widget.maxValue).toDouble(),
+                          min: 0,
+                          max: widget.maxValue.toDouble(),
+                          onChange: null,
+                        ),
+                        const SizedBox(
+                          width: 16,
+                        ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,33 +124,6 @@ class _SkillCardState extends State<SkillCard> {
                             ],
                           ),
                         ),
-                        SleekCircularSlider(
-                          appearance: CircularSliderAppearance(
-                            size: 75,
-                            customColors: CustomSliderColors(
-                              hideShadow: true,
-                              trackColor: widget.isDark
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
-                              dotColor: Colors.blue.shade600,
-                              progressBarColor: Colors.blue.shade600,
-                            ),
-                            infoProperties: InfoProperties(
-                              mainLabelStyle: TextStyle(
-                                color:
-                                    widget.isDark ? Colors.white : Colors.black,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              modifier: (double value) => "Lvl ${widget.level}",
-                            ),
-                          ),
-                          initialValue:
-                              widget.score.clamp(0, widget.maxValue).toDouble(),
-                          min: 0,
-                          max: widget.maxValue.toDouble(),
-                          onChange: null,
-                        ),
                       ],
                     ),
                     if (widget.isExpanded)
@@ -137,17 +141,25 @@ class _SkillCardState extends State<SkillCard> {
                                 Transform.scale(
                                   scale:
                                       1.3, // Adjust scale to make checkbox bigger (e.g., 1.5 for 50% larger)
-                                  child: Checkbox(
-                                    value: canUpdate
-                                        ? widget.selectedHabits
-                                            .contains(habitName)
-                                        : true,
-                                    onChanged: canUpdate
-                                        ? (bool? value) => widget
-                                            .onHabitChanged(habitName, value)
-                                        : null,
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: Checkbox(
+                                      value: canUpdate
+                                          ? widget.selectedHabits
+                                              .contains(habitName)
+                                          : true,
+                                      onChanged: canUpdate
+                                          ? (bool? value) {
+                                              widget.onHabitChanged(
+                                                  habitName, value);
+                                              widget.onUpdateScore();
+                                            }
+                                          : null,
+                                    ),
                                   ),
                                 ),
+                                const SizedBox(width: 16),
                                 Expanded(
                                   child: Text(
                                     habitName.toUpperCase(),
@@ -160,6 +172,8 @@ class _SkillCardState extends State<SkillCard> {
                                 ),
                                 !canUpdate
                                     ? Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 4),
                                         decoration: BoxDecoration(
                                           color: Colors.blue.shade100,
                                           borderRadius:
@@ -174,15 +188,14 @@ class _SkillCardState extends State<SkillCard> {
                                               fontWeight: FontWeight.bold),
                                         ),
                                       )
-                                    : const SizedBox(),
+                                    : Container(
+                                        height: 24,
+                                        margin:
+                                            const EdgeInsets.only(bottom: 12),
+                                      ),
                               ],
                             );
                           }),
-                          ElevatedButton(
-                            onPressed:
-                                widget.isMaxed ? null : widget.onUpdateScore,
-                            child: const Text('Update Score'),
-                          ),
                         ],
                       ),
                   ],

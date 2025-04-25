@@ -284,6 +284,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                   },
                 ),
       floatingActionButton: FloatingActionButton(
+        elevation: 0,
         onPressed: () async {
           final result = await Get.to(() => const SkillSetupScreen());
           if (result == true) {
