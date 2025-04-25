@@ -1,65 +1,84 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'dart:async';
 
 class SqlDb {
-  static Database? _db;
+  static Database? _database;
 
-  Future<Database?> get db async {
-    _db ??= await initialDb();
-    return _db;
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+
+    _database = await _initDb();
+    return _database!;
   }
 
-  Future<Database> initialDb() async {
-    String dataBasePath = await getDatabasesPath();
-    String path = join(dataBasePath, "skills.db");
-
-    Database myDb = await openDatabase(
+  Future<Database> _initDb() async {
+    String path = join(await getDatabasesPath(), 'skill_monitor.db');
+    return openDatabase(
       path,
-      version: 1, // ✅ Required when using onCreate
-      onCreate: _onCreate,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill TEXT,
+            score INTEGER,
+            level INTEGER
+          )
+        ''');
+
+        await db.execute('''
+          CREATE TABLE habits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill_id INTEGER,
+            name TEXT,
+            value INTEGER,
+            last_updated TEXT, -- Store last updated date for each habit
+            FOREIGN KEY(skill_id) REFERENCES skills(id)
+          )
+        ''');
+      },
+      version: 1,
     );
-
-    return myDb;
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE skills(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        skill TEXT NOT NULL,
-        score INTEGER NOT NULL DEFAULT 0,
-        level INTEGER NOT NULL DEFAULT 1
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE habits(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        skill_id INTEGER NOT NULL,
-        habit TEXT NOT NULL,
-        value INTEGER NOT NULL,
-        FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
-      )
-    ''');
+  // Insert new skill
+  Future<int> insertData(String query) async {
+    final db = await database;
+    return await db.rawUpdate(query);
   }
 
-  Future<List<Map>> readData(String sql) async {
-    Database? myDb = await db;
-    return await myDb!.rawQuery(sql);
+  // Read data
+  Future<List<Map<String, dynamic>>> readData(String query) async {
+    final db = await database;
+    return await db.rawQuery(query);
   }
 
-  Future<int> insertData(String sql) async {
-    Database? myDb = await db;
-    return await myDb!.rawInsert(sql);
+  // Update data
+  Future<int> updateData(String query) async {
+    final db = await database;
+    return await db.rawUpdate(query);
   }
 
-  Future<int> updateData(String sql) async {
-    Database? myDb = await db;
-    return await myDb!.rawUpdate(sql);
+  // Delete data
+  Future<int> deleteData(String query) async {
+    final db = await database;
+    return await db.rawDelete(query);
   }
 
-  Future<int> deleteData(String sql) async {
-    Database? myDb = await db;
-    return await myDb!.rawDelete(sql);
+  // Update the `last_updated` date for a habit
+  Future<void> updateHabitDate(int skillId, String habitName) async {
+    final db = await database;
+    await db.update(
+      'habits',
+      {'last_updated': getCurrentDate()},
+      where: 'skill_id = ? AND name = ?',
+      whereArgs: [skillId, habitName],
+    );
+  }
+
+  // Get the current date as a string (YYYY-MM-DD)
+  String getCurrentDate() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 }

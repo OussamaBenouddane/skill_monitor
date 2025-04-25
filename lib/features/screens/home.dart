@@ -20,18 +20,24 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   final Map<int, Set<String>> _selectedHabits = {};
   final Map<int, AnimationController> _animationControllers = {};
   final Map<int, Animation<double>> _animations = {};
+
   final List<int> levelRequirements = [
-    100,
-    200,
-    300,
-    400,
-    500,
-    600,
-    700,
-    800,
-    900,
-    1000
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
   ];
+
+  final Map<int, String> levelLabels = {
+    1: "Beginner — Starting things out",
+    2: "Learner — Picking up speed",
+    3: "Novice — Getting the hang of it",
+    4: "Explorer — Staying consistent",
+    5: "Improver — Seeing real progress",
+    6: "Practitioner — Skill is building",
+    7: "Advanced — Getting sharp",
+    8: "Pro — Almost there",
+    9: "Expert — Owning it",
+    10: "Master — You maxed this skill",
+  };
+
   bool _isLoading = false;
 
   @override
@@ -44,7 +50,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     final query = '''
       SELECT s.id as skill_id, s.skill, s.score, s.level,
-             h.habit, h.value
+             h.habit, h.value, h.last_updated
       FROM skills s
       LEFT JOIN habits h ON s.id = h.skill_id
     ''';
@@ -60,16 +66,24 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           "name": row['skill'],
           "score": row['score'],
           "level": row['level'],
-          "habits": <Map<String, dynamic>>[]
+          "habits": <Map<String, dynamic>>[],
         };
       }
       if (row['habit'] != null) {
-        grouped[id]!['habits']
-            .add({"name": row['habit'], "value": row['value']});
+        grouped[id]!['habits'].add({
+          "name": row['habit'],
+          "value": row['value'],
+          "last_updated": row['last_updated'],
+        });
       }
     }
 
     skills = grouped.values.toList();
+    skills.sort((a, b) {
+      if (a['level'] == 10 && b['level'] != 10) return 1;
+      if (a['level'] != 10 && b['level'] == 10) return -1;
+      return 0;
+    });
 
     for (var skill in skills) {
       final id = skill['id'];
@@ -115,6 +129,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       newLevel++;
     }
 
+    if (newLevel > 10) newLevel = 10;
+
     await dbHelper.updateData(
       'UPDATE skills SET score = $currentScore, level = $newLevel WHERE id = $skillId',
     );
@@ -124,7 +140,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       skills[index]['level'] = newLevel;
 
       _animationControllers[skillId]!.stop();
-      _animations[skillId] = Tween<double>(
+      _animations[skillId] = Tween<double>( 
         begin: oldScore.toDouble(),
         end: currentScore.toDouble(),
       ).animate(CurvedAnimation(
@@ -135,6 +151,15 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         ..reset()
         ..forward();
     });
+  }
+
+  Future<void> _updateHabitDate(int skillId, String habitName) async {
+    await dbHelper.updateHabitDate(skillId, habitName);
+  }
+
+  bool _canUpdateHabit(String lastUpdated) {
+    final currentDate = dbHelper.getCurrentDate();
+    return lastUpdated != currentDate;
   }
 
   @override
@@ -175,6 +200,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     final name = skill['name'];
                     final isExpanded = _expandedIndices.contains(index);
                     final selected = _selectedHabits[id] ?? <String>{};
+                    final isMaxed = skill['level'] >= 10;
 
                     return Dismissible(
                       key: ValueKey(id),
@@ -184,8 +210,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                           context: context,
                           builder: (_) => AlertDialog(
                             title: const Text('Delete Skill'),
-                            content: Text(
-                                'Are you sure you want to delete "$name"?'),
+                            content:
+                                Text('Are you sure you want to delete "$name"?'),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context, false),
@@ -210,10 +236,13 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
                         child: GestureDetector(
-                          onTap: () => setState(() => isExpanded
-                              ? _expandedIndices.remove(index)
-                              : _expandedIndices.add(index)),
+                          onTap: isMaxed
+                              ? null
+                              : () => setState(() => isExpanded
+                                  ? _expandedIndices.remove(index)
+                                  : _expandedIndices.add(index)),
                           child: Card(
+                            color: isMaxed ? Colors.grey.shade300 : null,
                             margin: const EdgeInsets.fromLTRB(10, 0, 10, 20),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),
@@ -237,160 +266,78 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                                         .textTheme
                                                         .titleLarge),
                                                 const SizedBox(height: 4),
-                                                AnimatedBuilder(
-                                                  animation: _animations[id]!,
-                                                  builder: (context, _) => Text(
-                                                    '${TTexts.score}${_animations[id]!.value.toStringAsFixed(0)}',
-                                                  ),
-                                                ),
+                                                Text(levelLabels[skill['level']] ?? '',
+                                                    style: const TextStyle(fontSize: 14)),
                                               ],
                                             ),
                                           ),
-                                          AnimatedBuilder(
-                                            animation: _animations[id]!,
-                                            builder: (context, _) =>
-                                                SleekCircularSlider(
-                                              appearance:
-                                                  CircularSliderAppearance(
-                                                size: 80,
-                                                customColors:
-                                                    CustomSliderColors(
-                                                  trackColor: isDark
-                                                      ? Colors.grey.shade700
-                                                      : Colors.grey.shade300,
-                                                  progressBarColor: isDark
-                                                      ? Colors.teal
-                                                      : Colors.blueAccent,
-                                                ),
-                                              ),
-                                              min: 0,
-                                              max: 100,
-                                              initialValue:
-                                                  _animations[id]!.value,
-                                              innerWidget: (_) => Center(
-                                                child: Text(
-                                                  '${TTexts.level}${skill['level']}',
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold),
-                                                ),
+                                          SleekCircularSlider(
+                                            appearance: CircularSliderAppearance(
+                                              size: 80,
+                                              customColors: CustomSliderColors(
+                                                trackColor: isDark
+                                                    ? Colors.grey.shade700
+                                                    : Colors.grey.shade300,
+                                                progressBarColor: isDark
+                                                    ? Colors.blue.shade400
+                                                    : Colors.blue.shade600,
                                               ),
                                             ),
+                                            initialValue: skill['score'].toDouble(),
+                                            min: 0,
+                                            max: 1000,
+                                            onChange: (value) {},
                                           ),
                                         ],
                                       ),
-                                      if (isExpanded) ...[
-                                        const Divider(),
-                                        ...List<Widget>.from(skill['habits']
-                                            .map<Widget>((habit) {
-                                          final habitName = habit['name'];
-                                          final habitValue = habit['value'];
-                                          return CheckboxListTile(
-                                            title: Text(
-                                                '$habitName (+$habitValue)'),
-                                            value: selected.contains(habitName),
-                                            onChanged: (value) {
-                                              setState(() {
-                                                final newSet =
-                                                    Set<String>.from(selected);
-                                                value == true
-                                                    ? newSet.add(habitName)
-                                                    : newSet.remove(habitName);
-                                                _selectedHabits[id] = newSet;
-
-                                                final baseScore =
-                                                    skills[index]['score'];
-                                                int previewScore = baseScore;
-                                                for (var h in skills[index]
-                                                    ['habits']) {
-                                                  if (newSet
-                                                      .contains(h['name'])) {
-                                                    previewScore +=
-                                                        h['value'] as int;
-                                                  }
-                                                }
-
-                                                _animationControllers[id]!
-                                                    .stop();
-                                                _animations[id] = Tween<double>(
-                                                  begin: _animations[id]!.value,
-                                                  end: previewScore.toDouble(),
-                                                ).animate(CurvedAnimation(
-                                                  parent: _animationControllers[
-                                                      id]!,
-                                                  curve: Curves.easeInOut,
-                                                ));
-                                                _animationControllers[id]!
-                                                  ..reset()
-                                                  ..forward();
-                                              });
-                                            },
-                                          );
-                                        })),
-                                        ElevatedButton(
-                                          onPressed: selected.isNotEmpty
-                                              ? () => _updateScoreAndLevel(
-                                                  id, index)
-                                              : null,
-                                          child: const Text('Update Score'),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 4,
-                                  left: 4,
-                                  child: Row(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit,
-                                            color: Colors.orange),
-                                        onPressed: () async {
-                                          bool? refreshed = await Get.to(() =>
-                                              SkillSetupScreen(
-                                                  id: skill['id'],
-                                                  existingHabits:
-                                                      skill['habits'],
-                                                  existingSkillName:
-                                                      skill['name']));
-                                          if (refreshed == true) {
-                                            _loadSkillsFromDatabase();
-                                          }
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_forever,
-                                            color: Colors.red),
-                                        onPressed: () async {
-                                          bool? confirm = await showDialog(
-                                            context: context,
-                                            builder: (_) => AlertDialog(
-                                              title: const Text('Delete Skill'),
-                                              content: Text(
-                                                  'Are you sure you want to delete "$name"?'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          context, false),
-                                                  child: const Text('Cancel'),
-                                                ),
-                                                ElevatedButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          context, true),
-                                                  child: const Text('Delete'),
-                                                ),
-                                              ],
+                                      if (isExpanded)
+                                        Column(
+                                          children: [
+                                            const SizedBox(height: 12),
+                                            Column(
+                                              children: (skill['habits'] as List)
+                                                  .map<Widget>((habit) {
+                                                final habitName = habit['name'];
+                                                final lastUpdated =
+                                                    habit['last_updated'];
+                                                return CheckboxListTile(
+                                                  value: selected
+                                                      .contains(habitName),
+                                                  onChanged: (bool? value) async {
+                                                    if (_canUpdateHabit(lastUpdated)) {
+                                                      setState(() {
+                                                        if (value == true) {
+                                                          selected.add(habitName);
+                                                        } else {
+                                                          selected.remove(habitName);
+                                                        }
+                                                      });
+                                                      await _updateHabitDate(
+                                                          skill['id'], habitName);
+                                                    }
+                                                  },
+                                                  title: Text(habitName),
+                                                );
+                                              }).toList(),
                                             ),
-                                          );
-                                          if (confirm == true) _deleteSkill(id);
-                                        },
-                                      ),
+                                            const SizedBox(height: 16),
+                                            ElevatedButton(
+                                              onPressed: () async {
+                                                await _updateScoreAndLevel(id, index);
+                                              },
+                                              child: const Text('Update Score'),
+                                            ),
+                                          ],
+                                        ),
                                     ],
                                   ),
                                 ),
+                                if (isMaxed)
+                                  Positioned(
+                                    top: 10,
+                                    right: 10,
+                                    child: Icon(Icons.lock, color: Colors.black45),
+                                  ),
                               ],
                             ),
                           ),
@@ -399,13 +346,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          bool? refreshed = await Get.to(() => const SkillSetupScreen());
-          if (refreshed == true) _loadSkillsFromDatabase();
-        },
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }
