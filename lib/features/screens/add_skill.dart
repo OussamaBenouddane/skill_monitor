@@ -31,7 +31,6 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
   @override
   void initState() {
     super.initState();
-    print(isEditing);
     if (isEditing) {
       _skillNameController.text = widget.existingSkillName!;
       _habits = widget.existingHabits!.map((habit) {
@@ -80,22 +79,24 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
           final habitName = habit.nameController.text.trim();
           final habitValue = habit.value;
           await sqlDb.insertData('''
-            INSERT INTO habits (skill_id, habit, value)
-            VALUES (${widget.id}, "$habitName", $habitValue)
+            INSERT INTO habits (skill_id, name, value, last_updated)
+            VALUES (${widget.id}, "$habitName", $habitValue, "")
           ''');
         }
       } else {
-        // INSERT new skill
+        // INSERT new skill - ensure we set initial score and level
         int skillId = await sqlDb.insertData('''
-          INSERT INTO skills (skill) VALUES ("$skillName")
+          INSERT INTO skills (skill, score, level) 
+          VALUES ("$skillName", 0, 1)
         ''');
 
+        // INSERT new habits
         for (var habit in nonEmptyHabits) {
           final habitName = habit.nameController.text.trim();
           final habitValue = habit.value;
           await sqlDb.insertData('''
-            INSERT INTO habits (skill_id, habit, value)
-            VALUES ($skillId, "$habitName", $habitValue)
+            INSERT INTO habits (skill_id, name, value, last_updated)
+            VALUES ($skillId, "$habitName", $habitValue, "")
           ''');
         }
       }

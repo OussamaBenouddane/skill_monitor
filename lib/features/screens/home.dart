@@ -50,7 +50,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     final query = '''
       SELECT s.id as skill_id, s.skill, s.score, s.level,
-             h.habit, h.value, h.last_updated
+             h.name, h.value, h.last_updated
       FROM skills s
       LEFT JOIN habits h ON s.id = h.skill_id
     ''';
@@ -64,14 +64,14 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         grouped[id] = {
           "id": id,
           "name": row['skill'],
-          "score": row['score'],
-          "level": row['level'],
+          "score": row['score'] ?? 0,
+          "level": row['level'] ?? 1,
           "habits": <Map<String, dynamic>>[],
         };
       }
-      if (row['habit'] != null) {
+      if (row['name'] != null) {
         grouped[id]!['habits'].add({
-          "name": row['habit'],
+          "name": row['name'],
           "value": row['value'],
           "last_updated": row['last_updated'],
         });
@@ -109,12 +109,22 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
 
   Future<void> _updateScoreAndLevel(int skillId, int index) async {
     final selected = _selectedHabits[skillId] ?? {};
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No habits selected to update')),
+      );
+      return;
+    }
+    
     final habits = skills[index]['habits'] as List;
 
     int newScore = 0;
+    List<String> updatedHabits = [];
+    
     for (var habit in habits) {
       if (selected.contains(habit['name'])) {
         newScore += habit['value'] as int;
+        updatedHabits.add(habit['name']);
       }
     }
 
@@ -135,7 +145,14 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       'UPDATE skills SET score = $currentScore, level = $newLevel WHERE id = $skillId',
     );
 
+    // Update timestamps for each selected habit
+    for (String habitName in updatedHabits) {
+      await _updateHabitDate(skillId, habitName);
+    }
+
+    // Clear selections after updating
     setState(() {
+      _selectedHabits[skillId]?.clear();
       skills[index]['score'] = currentScore;
       skills[index]['level'] = newLevel;
 
@@ -151,15 +168,27 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         ..reset()
         ..forward();
     });
+    
+    // Force reload to get fresh last_updated values
+    await _loadSkillsFromDatabase();
   }
 
   Future<void> _updateHabitDate(int skillId, String habitName) async {
     await dbHelper.updateHabitDate(skillId, habitName);
   }
 
-  bool _canUpdateHabit(String lastUpdated) {
+  bool _canUpdateHabit(String? lastUpdated) {
     final currentDate = dbHelper.getCurrentDate();
-    return lastUpdated != currentDate;
+    // Allow update if never updated before or last updated on a different day
+    return lastUpdated == null || lastUpdated.isEmpty || lastUpdated != currentDate;
+  }
+
+  // Get the max value for the current level
+  int _getCurrentLevelRequirement(int level) {
+    if (level <= 0 || level > levelRequirements.length) {
+      return 100; // Default to first level requirement
+    }
+    return levelRequirements[level - 1];
   }
 
   @override
@@ -198,9 +227,12 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     final skill = skills[index];
                     final id = skill['id'];
                     final name = skill['name'];
+                    final level = skill['level'];
+                    final score = skill['score'];
                     final isExpanded = _expandedIndices.contains(index);
                     final selected = _selectedHabits[id] ?? <String>{};
-                    final isMaxed = skill['level'] >= 10;
+                    final isMaxed = level >= 10;
+                    final maxValue = _getCurrentLevelRequirement(level);
 
                     return Dismissible(
                       key: ValueKey(id),
@@ -266,7 +298,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                                         .textTheme
                                                         .titleLarge),
                                                 const SizedBox(height: 4),
-                                                Text(levelLabels[skill['level']] ?? '',
+                                                Text(levelLabels[level] ?? '',
                                                     style: const TextStyle(fontSize: 14)),
                                               ],
                                             ),
@@ -282,10 +314,20 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                                     ? Colors.blue.shade400
                                                     : Colors.blue.shade600,
                                               ),
+                                              infoProperties: InfoProperties(
+                                                mainLabelStyle: TextStyle(
+                                                  color: isDark ? Colors.white : Colors.black,
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                modifier: (double value) {
+                                                  return "Lv $level";
+                                                },
+                                              ),
                                             ),
-                                            initialValue: skill['score'].toDouble(),
+                                            initialValue: score.toDouble(),
                                             min: 0,
-                                            max: 1000,
+                                            max: maxValue.toDouble(),
                                             onChange: (value) {},
                                           ),
                                         ],
@@ -300,23 +342,27 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                                 final habitName = habit['name'];
                                                 final lastUpdated =
                                                     habit['last_updated'];
+                                                final canUpdate = _canUpdateHabit(lastUpdated);
+                                                
                                                 return CheckboxListTile(
-                                                  value: selected
-                                                      .contains(habitName),
-                                                  onChanged: (bool? value) async {
-                                                    if (_canUpdateHabit(lastUpdated)) {
-                                                      setState(() {
-                                                        if (value == true) {
-                                                          selected.add(habitName);
-                                                        } else {
-                                                          selected.remove(habitName);
-                                                        }
-                                                      });
-                                                      await _updateHabitDate(
-                                                          skill['id'], habitName);
-                                                    }
-                                                  },
+                                                  value: selected.contains(habitName),
+                                                  onChanged: canUpdate ? (bool? value) {
+                                                    setState(() {
+                                                      if (value == true) {
+                                                        _selectedHabits.putIfAbsent(
+                                                          skill['id'], 
+                                                          () => <String>{}
+                                                        ).add(habitName);
+                                                      } else {
+                                                        _selectedHabits[skill['id']]?.remove(habitName);
+                                                      }
+                                                    });
+                                                  } : null,
                                                   title: Text(habitName),
+                                                  subtitle: !canUpdate 
+                                                      ? const Text('Already updated today', 
+                                                          style: TextStyle(color: Colors.red))
+                                                      : null,
                                                 );
                                               }).toList(),
                                             ),
@@ -346,6 +392,15 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     );
                   },
                 ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Get.to(() => const SkillSetupScreen());
+          if (result == true) {
+            _loadSkillsFromDatabase();
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
 
 class SqlDb {
   static Database? _database;
@@ -21,8 +22,8 @@ class SqlDb {
           CREATE TABLE skills (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             skill TEXT,
-            score INTEGER,
-            level INTEGER
+            score INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1
           )
         ''');
 
@@ -32,7 +33,7 @@ class SqlDb {
             skill_id INTEGER,
             name TEXT,
             value INTEGER,
-            last_updated TEXT, -- Store last updated date for each habit
+            last_updated TEXT DEFAULT '', -- Store last updated date for each habit
             FOREIGN KEY(skill_id) REFERENCES skills(id)
           )
         ''');
@@ -44,7 +45,7 @@ class SqlDb {
   // Insert new skill
   Future<int> insertData(String query) async {
     final db = await database;
-    return await db.rawUpdate(query);
+    return await db.rawInsert(query);
   }
 
   // Read data
@@ -66,11 +67,14 @@ class SqlDb {
   }
 
   // Update the `last_updated` date for a habit
-  Future<void> updateHabitDate(int skillId, String habitName) async {
+  Future<int> updateHabitDate(int skillId, String habitName) async {
     final db = await database;
-    await db.update(
+    final date = getCurrentDate();
+    debugPrint('Updating habit date for skill $skillId, habit $habitName to $date');
+    
+    return await db.update(
       'habits',
-      {'last_updated': getCurrentDate()},
+      {'last_updated': date},
       where: 'skill_id = ? AND name = ?',
       whereArgs: [skillId, habitName],
     );
