@@ -31,7 +31,7 @@ class HabitForm extends StatelessWidget {
             Expanded(
               child: Slider(
                 value: habit.value.toDouble(),
-                min: 0,
+                min: -20,
                 max: 20,
                 divisions: 20,
                 label: habit.value.toString(),

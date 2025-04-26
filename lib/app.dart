@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
           routes: {
             '/add_skill': (context) => const SkillSetupScreen(),
           },
-          home: Home(),
+          home: const Home(),
           debugShowCheckedModeBanner: false,
         ));
   }

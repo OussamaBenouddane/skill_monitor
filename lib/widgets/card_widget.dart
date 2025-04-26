@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:skill_monitor/sqflite.dart';
 import 'package:skill_monitor/utils/constants/colors.dart';
 import 'package:skill_monitor/utils/constants/system.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
@@ -15,10 +14,11 @@ class SkillCard extends StatefulWidget {
   final bool isMaxed;
   final int maxValue;
   final bool isDark;
-  final SqlDb dbHelper; // Inject SqlDb
   final VoidCallback onTap;
   final Function(String, bool?) onHabitChanged;
   final VoidCallback onUpdateScore;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const SkillCard({
     super.key,
@@ -32,10 +32,11 @@ class SkillCard extends StatefulWidget {
     required this.isMaxed,
     required this.maxValue,
     required this.isDark,
-    required this.dbHelper,
     required this.onTap,
     required this.onHabitChanged,
     required this.onUpdateScore,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -44,7 +45,7 @@ class SkillCard extends StatefulWidget {
 
 class _SkillCardState extends State<SkillCard> {
   bool _canUpdateHabit(String? lastUpdated) {
-    final currentDate = widget.dbHelper.getCurrentDate();
+    final currentDate = DateTime.now().toIso8601String().substring(0, 10);
     return lastUpdated == null ||
         lastUpdated.isEmpty ||
         lastUpdated != currentDate;
@@ -52,7 +53,6 @@ class _SkillCardState extends State<SkillCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Validate level
     final levelLabel =
         SystemConstants.levelLabels[widget.level] ?? 'Unknown Level';
 
@@ -64,13 +64,15 @@ class _SkillCardState extends State<SkillCard> {
         child: Card(
           elevation: 0,
           color: widget.isMaxed ? Colors.white : null,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Stack(
             children: [
+              // Card Content
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -103,9 +105,7 @@ class _SkillCardState extends State<SkillCard> {
                           max: widget.maxValue.toDouble(),
                           onChange: null,
                         ),
-                        const SizedBox(
-                          width: 16,
-                        ),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,84 +126,92 @@ class _SkillCardState extends State<SkillCard> {
                         ),
                       ],
                     ),
-                    if (widget.isExpanded)
-                      Column(
-                        children: [
-                          ...widget.habits.map<Widget>((habit) {
-                            final habitName =
-                                habit['name'] as String? ?? 'Unnamed Habit';
-                            final lastUpdated =
-                                habit['last_updated'] as String?;
-                            final canUpdate = _canUpdateHabit(lastUpdated);
+                    if (widget.isExpanded) ...[
+                      const SizedBox(height: 12),
+                      ...widget.habits.map<Widget>((habit) {
+                        final habitName =
+                            habit['name'] as String? ?? 'Unnamed Habit';
+                        final lastUpdated = habit['last_updated'] as String?;
+                        final canUpdate = _canUpdateHabit(lastUpdated);
 
-                            return Row(
-                              children: [
-                                Transform.scale(
-                                  scale:
-                                      1.3, // Adjust scale to make checkbox bigger (e.g., 1.5 for 50% larger)
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Checkbox(
-                                      value: canUpdate
-                                          ? widget.selectedHabits
-                                              .contains(habitName)
-                                          : true,
-                                      onChanged: canUpdate
-                                          ? (bool? value) {
-                                              widget.onHabitChanged(
-                                                  habitName, value);
-                                              widget.onUpdateScore();
-                                            }
-                                          : null,
-                                    ),
+                        final isChecked =
+                            widget.selectedHabits.contains(habitName);
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Transform.scale(
+                                scale: 1.3,
+                                child: Checkbox(
+                                  value: isChecked,
+                                  onChanged: (bool? value) {
+                                    widget.onHabitChanged(habitName, value);
+                                    widget.onUpdateScore();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  habitName.toUpperCase(),
+                                  style: TextStyle(
+                                    decoration: canUpdate
+                                        ? null
+                                        : (isChecked
+                                            ? TextDecoration.lineThrough
+                                            : null),
                                   ),
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
+                              ),
+                              if (!canUpdate && isChecked)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
                                   child: Text(
-                                    habitName.toUpperCase(),
-                                    style: TextStyle(
-                                      decoration: !canUpdate
-                                          ? TextDecoration.lineThrough
-                                          : null,
+                                    "+ ${habit['value']} XP",
+                                    style: const TextStyle(
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
-                                !canUpdate
-                                    ? Container(
-                                        margin:
-                                            const EdgeInsets.only(bottom: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.shade100,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        child: Text(
-                                          "+ ${habit['value']} XP",
-                                          style: const TextStyle(
-                                              color: Colors.blue,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      )
-                                    : Container(
-                                        height: 24,
-                                        margin:
-                                            const EdgeInsets.only(bottom: 12),
-                                      ),
-                              ],
-                            );
-                          }),
-                        ],
-                      ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+              // Edit and Delete floating buttons
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20),
+                      onPressed: widget.onEdit,
+                      tooltip: 'Edit Skill',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, size: 20),
+                      onPressed: widget.onDelete,
+                      tooltip: 'Delete Skill',
+                    ),
                   ],
                 ),
               ),
               if (widget.isMaxed)
                 const Positioned(
-                  top: 10,
+                  bottom: 10,
                   right: 10,
                   child: Tooltip(
                     message: 'Skill is fully mastered',

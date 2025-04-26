@@ -5,7 +5,7 @@ import 'package:skill_monitor/sqflite.dart';
 import 'package:skill_monitor/theme_controller.dart';
 import 'package:skill_monitor/utils/constants/system.dart';
 import 'package:skill_monitor/utils/constants/text_strings.dart';
-import 'package:skill_monitor/widgets/card_widget.dart'; // Ensure this points to the SkillCard file
+import 'package:skill_monitor/widgets/card_widget.dart'; // Make sure SkillCard file is correct.
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -96,67 +96,59 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     await _loadSkillsFromDatabase();
   }
 
-  Future<void> _updateScoreAndLevel(int skillId, int index) async {
-    final selected = _selectedHabits[skillId] ?? {};
-    if (selected.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No habits selected to update')),
-      );
-      return;
+ Future<void> _updateScoreAndLevel(int skillId, int index) async {
+  final selected = _selectedHabits[skillId] ?? {};
+  
+  final habits = skills[index]['habits'] as List<Map<String, dynamic>>;
+  int newScore = 0;
+  List<String> updatedHabits = [];
+
+  for (var habit in habits) {
+    if (selected.contains(habit['name'])) {
+      newScore += habit['value'] as int;
+      updatedHabits.add(habit['name']);
     }
-
-    final habits = skills[index]['habits'] as List<Map<String, dynamic>>;
-    int newScore = 0;
-    List<String> updatedHabits = [];
-
-    for (var habit in habits) {
-      if (selected.contains(habit['name'])) {
-        newScore += habit['value'] as int;
-        updatedHabits.add(habit['name']);
-      }
-    }
-
-    int oldScore = skills[index]['score'];
-    int oldLevel = skills[index]['level'];
-    int currentScore = oldScore + newScore;
-    int newLevel = oldLevel;
-
-    while (newLevel < SystemConstants.levelRequirements.length &&
-        currentScore >= SystemConstants.levelRequirements[newLevel - 1]) {
-      currentScore -= SystemConstants.levelRequirements[newLevel - 1];
-      newLevel++;
-    }
-
-    if (newLevel > 10) newLevel = 10;
-
-    await dbHelper.updateData(
-      'UPDATE skills SET score = $currentScore, level = $newLevel WHERE id = $skillId',
-    );
-
-    for (String habitName in updatedHabits) {
-      await _updateHabitDate(skillId, habitName);
-    }
-
-    setState(() {
-      _selectedHabits[skillId]?.clear();
-      skills[index]['score'] = currentScore;
-      skills[index]['level'] = newLevel;
-
-      _animationControllers[skillId]!.stop();
-      _animations[skillId] = Tween<double>(
-        begin: oldScore.toDouble(),
-        end: currentScore.toDouble(),
-      ).animate(CurvedAnimation(
-        parent: _animationControllers[skillId]!,
-        curve: Curves.easeInOut,
-      ));
-      _animationControllers[skillId]!
-        ..reset()
-        ..forward();
-    });
-
-    await _loadSkillsFromDatabase();
   }
+
+  int oldScore = skills[index]['score'];
+  int currentScore = newScore;
+  int newLevel = 1;
+
+  while (newLevel < SystemConstants.levelRequirements.length &&
+      currentScore >= SystemConstants.levelRequirements[newLevel - 1]) {
+    currentScore -= SystemConstants.levelRequirements[newLevel - 1];
+    newLevel++;
+  }
+
+  if (newLevel > 10) newLevel = 10;
+
+  await dbHelper.updateData(
+    'UPDATE skills SET score = $currentScore, level = $newLevel WHERE id = $skillId',
+  );
+
+  for (String habitName in updatedHabits) {
+    await _updateHabitDate(skillId, habitName);
+  }
+
+  setState(() {
+    skills[index]['score'] = currentScore;
+    skills[index]['level'] = newLevel;
+
+    _animationControllers[skillId]?.stop();
+    _animations[skillId] = Tween<double>(
+      begin: oldScore.toDouble(),
+      end: currentScore.toDouble(),
+    ).animate(CurvedAnimation(
+      parent: _animationControllers[skillId]!,
+      curve: Curves.easeInOut,
+    ));
+    _animationControllers[skillId]!
+      ..reset()
+      ..forward();
+  });
+}
+
+
 
   Future<void> _updateHabitDate(int skillId, String habitName) async {
     await dbHelper.updateHabitDate(skillId, habitName);
@@ -207,79 +199,88 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     final id = skill['id'];
                     final name = skill['name'];
                     final level = skill['level'];
-                    final score = skill['score'];
                     final isExpanded = _expandedIndices.contains(index);
                     final selected = _selectedHabits[id] ?? <String>{};
                     final isMaxed = level >= 10;
                     final maxValue = _getCurrentLevelRequirement(level);
 
-                    return Dismissible(
-                      key: ValueKey(id),
-                      direction: DismissDirection.endToStart,
-                      confirmDismiss: (_) async {
-                        return await showDialog(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text('Delete Skill'),
-                            content: Text(
-                              'Are you sure you want to delete "$name"?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      onDismissed: (_) => _deleteSkill(id),
-                      background: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        alignment: Alignment.centerRight,
-                        color: Colors.redAccent,
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      child: AnimatedBuilder(
-                        animation: _animations[id]!,
-                        builder: (context, child) {
-                          return SkillCard(
-                            id: id,
-                            name: name,
-                            level: level,
-                            score: _animations[id]!.value.round(),
-                            habits:
-                                skill['habits'] as List<Map<String, dynamic>>,
-                            isExpanded: isExpanded,
-                            selectedHabits: selected,
-                            isMaxed: isMaxed,
-                            maxValue: maxValue,
-                            isDark: isDark,
-                            dbHelper: dbHelper,
-                            onTap: () => setState(() => isExpanded
-                                ? _expandedIndices.remove(index)
-                                : _expandedIndices.add(index)),
-                            onHabitChanged: (habitName, value) {
-                              setState(() {
-                                if (value == true) {
-                                  _selectedHabits
-                                      .putIfAbsent(id, () => <String>{})
-                                      .add(habitName);
-                                } else {
-                                  _selectedHabits[id]?.remove(habitName);
+                    return Stack(
+                      children: [
+                        AnimatedBuilder(
+                          animation: _animations[id]!,
+                          builder: (context, child) {
+                            return SkillCard(
+                              id: id,
+                              name: name,
+                              level: level,
+                              score: _animations[id]!.value.round(),
+                              habits:
+                                  skill['habits'] as List<Map<String, dynamic>>,
+                              isExpanded: isExpanded,
+                              selectedHabits: selected,
+                              isMaxed: isMaxed,
+                              maxValue: maxValue,
+                              isDark: isDark,
+                              onTap: () => setState(() => isExpanded
+                                  ? _expandedIndices.remove(index)
+                                  : _expandedIndices.add(index)),
+                              onHabitChanged: (habitName, value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _selectedHabits
+                                        .putIfAbsent(id, () => <String>{})
+                                        .add(habitName);
+                                  } else {
+                                    _selectedHabits[id]?.remove(habitName);
+                                  }
+                                });
+                                _updateScoreAndLevel(id, index);
+                              },
+                              onUpdateScore: () async {
+                                await _updateScoreAndLevel(id, index);
+                              },
+                              onDelete: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('Delete Skill'),
+                                    content: Text(
+                                        'Are you sure you want to delete "$name"?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await _deleteSkill(id);
                                 }
-                              });
-                            },
-                            onUpdateScore: () async {
-                              await _updateScoreAndLevel(id, index);
-                            },
-                          );
-                        },
-                      ),
+                              },
+                              onEdit: () async {
+                                final result = await Get.to(() => SkillSetupScreen(
+                                      id: skill['id'],
+                                      existingHabits: skill['habits'],
+                                      existingSkillName: skill['name'],
+                                    ));
+                              if (result == true) {
+                                  await _loadSkillsFromDatabase();
+                                  setState(() {
+                                    
+                                  });
+                              }
+                              },
+                            );
+                          },
+                        ),
+                      ],
                     );
                   },
                 ),

@@ -42,6 +42,7 @@ class SqlDb {
     );
   }
 
+  
   // Insert new skill
   Future<int> insertData(String query) async {
     final db = await database;
