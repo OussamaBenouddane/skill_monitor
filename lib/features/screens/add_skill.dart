@@ -48,82 +48,81 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
   }
 
   void _finish() async {
-  final skillName = _skillNameController.text.trim();
-  final nonEmptyHabits =
-      _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
+    final skillName = _skillNameController.text.trim();
+    final nonEmptyHabits =
+        _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
 
-  if (skillName.isEmpty || nonEmptyHabits.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Skill name and at least one habit are required.'),
-      ),
-    );
-    return;
-  }
+    if (skillName.isEmpty || nonEmptyHabits.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Skill name and at least one habit are required.'),
+        ),
+      );
+      return;
+    }
 
-  // 🚨 New check: No habit with value 0 allowed
-  bool hasZeroValue = nonEmptyHabits.any((habit) => habit.value == 0);
-  if (hasZeroValue) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Habit values must not equal 0.'),
-      ),
-    );
-    return;
-  }
+    // 🚨 New check: No habit with value 0 allowed
+    bool hasZeroValue = nonEmptyHabits.any((habit) => habit.value == 0);
+    if (hasZeroValue) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Habit values must not equal 0.'),
+        ),
+      );
+      return;
+    }
 
-  setState(() => _isSaving = true);
+    setState(() => _isSaving = true);
 
-  try {
-    if (isEditing) {
-      // UPDATE existing skill
-      await sqlDb.updateData('''
+    try {
+      if (isEditing) {
+        // UPDATE existing skill
+        await sqlDb.updateData('''
         UPDATE skills SET skill = "$skillName" WHERE id = ${widget.id}
       ''');
 
-      // DELETE old habits
-      await sqlDb.deleteData('''
+        // DELETE old habits
+        await sqlDb.deleteData('''
         DELETE FROM habits WHERE skill_id = ${widget.id}
       ''');
 
-      // INSERT new habits
-      for (var habit in nonEmptyHabits) {
-        final habitName = habit.nameController.text.trim();
-        final habitValue = habit.value;
-        await sqlDb.insertData('''
+        // INSERT new habits
+        for (var habit in nonEmptyHabits) {
+          final habitName = habit.nameController.text.trim();
+          final habitValue = habit.value;
+          await sqlDb.insertData('''
           INSERT INTO habits (skill_id, name, value, last_updated)
           VALUES (${widget.id}, "$habitName", $habitValue, "")
         ''');
-      }
-    } else {
-      // INSERT new skill - ensure we set initial score and level
-      int skillId = await sqlDb.insertData('''
+        }
+      } else {
+        // INSERT new skill - ensure we set initial score and level
+        int skillId = await sqlDb.insertData('''
         INSERT INTO skills (skill, score, level) 
         VALUES ("$skillName", 0, 1)
       ''');
 
-      // INSERT new habits
-      for (var habit in nonEmptyHabits) {
-        final habitName = habit.nameController.text.trim();
-        final habitValue = habit.value;
-        await sqlDb.insertData('''
+        // INSERT new habits
+        for (var habit in nonEmptyHabits) {
+          final habitName = habit.nameController.text.trim();
+          final habitValue = habit.value;
+          await sqlDb.insertData('''
           INSERT INTO habits (skill_id, name, value, last_updated)
           VALUES ($skillId, "$habitName", $habitValue, "")
         ''');
+        }
       }
+
+      Get.back(result: true); // let Home know it should refresh
+    } catch (e) {
+      debugPrint('Error saving skill: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save skill.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-
-    Get.back(result: true); // let Home know it should refresh
-  } catch (e) {
-    debugPrint('Error saving skill: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Failed to save skill.')),
-    );
-  } finally {
-    if (mounted) setState(() => _isSaving = false);
   }
-}
-
 
   @override
   void dispose() {
