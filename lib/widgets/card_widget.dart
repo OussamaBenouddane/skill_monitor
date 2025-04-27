@@ -15,7 +15,7 @@ class SkillCard extends StatefulWidget {
   final int maxValue;
   final bool isDark;
   final VoidCallback onTap;
-  final Function(String, bool?) onHabitChanged;
+  final Function(String, bool?, {bool resetDate}) onHabitChanged;
   final VoidCallback onUpdateScore;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -147,8 +147,12 @@ class _SkillCardState extends State<SkillCard> {
                                 child: Checkbox(
                                   value: isChecked,
                                   onChanged: (bool? value) {
-                                    // Always allow checking/unchecking
-                                    widget.onHabitChanged(habitName, value);
+                                    // When unchecking, pass resetDate: true
+                                    widget.onHabitChanged(
+                                      habitName, 
+                                      value,
+                                      resetDate: value == false
+                                    );
                                     widget.onUpdateScore();
                                   },
                                 ),

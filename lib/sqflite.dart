@@ -42,7 +42,6 @@ class SqlDb {
     );
   }
 
-  
   // Insert new skill
   Future<int> insertData(String query) async {
     final db = await database;
@@ -71,8 +70,9 @@ class SqlDb {
   Future<int> updateHabitDate(int skillId, String habitName) async {
     final db = await database;
     final date = getCurrentDate();
-    debugPrint('Updating habit date for skill $skillId, habit $habitName to $date');
-    
+    debugPrint(
+        'Updating habit date for skill $skillId, habit $habitName to $date');
+
     return await db.update(
       'habits',
       {'last_updated': date},
@@ -85,5 +85,17 @@ class SqlDb {
   String getCurrentDate() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<int> resetHabitDate(int skillId, String habitName) async {
+    final db = await database;
+    debugPrint('Resetting habit date for skill $skillId, habit $habitName');
+
+    return await db.update(
+      'habits',
+      {'last_updated': ''}, // Set to empty string to indicate no date
+      where: 'skill_id = ? AND name = ?',
+      whereArgs: [skillId, habitName],
+    );
   }
 }
