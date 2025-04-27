@@ -44,16 +44,6 @@ class SkillCard extends StatefulWidget {
 }
 
 class _SkillCardState extends State<SkillCard> {
-  String _getCurrentDate() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
-
-  bool _isCompletedToday(String? lastUpdated) {
-    final currentDate = _getCurrentDate();
-    return lastUpdated == currentDate;
-  }
-
   @override
   Widget build(BuildContext context) {
     final levelLabel =
@@ -77,7 +67,7 @@ class _SkillCardState extends State<SkillCard> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Row(
                       children: [
@@ -130,63 +120,59 @@ class _SkillCardState extends State<SkillCard> {
                       ],
                     ),
                     if (widget.isExpanded) ...[
-                      const SizedBox(height: 12),
                       ...widget.habits.map<Widget>((habit) {
                         final habitName =
                             habit['name'] as String? ?? 'Unnamed Habit';
-                        final lastUpdated = habit['last_updated'] as String?;
                         final isChecked =
                             widget.selectedHabits.contains(habitName);
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Transform.scale(
-                                scale: 1.3,
+                        return Row(
+                          children: [
+                            Transform.scale(
+                              scale: 1.3,
+                              child: SizedBox(
+                                height: 24,
+                                width: 24,
                                 child: Checkbox(
                                   value: isChecked,
                                   onChanged: (bool? value) {
                                     // When unchecking, pass resetDate: true
-                                    widget.onHabitChanged(
-                                      habitName, 
-                                      value,
-                                      resetDate: value == false
-                                    );
+                                    widget.onHabitChanged(habitName, value,
+                                        resetDate: value == false);
                                     widget.onUpdateScore();
                                   },
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                habitName.toUpperCase(),
+                                style: TextStyle(
+                                  decoration: isChecked
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            if (isChecked)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 child: Text(
-                                  habitName.toUpperCase(),
-                                  style: TextStyle(
-                                    decoration: isChecked
-                                        ? TextDecoration.lineThrough
-                                        : null,
+                                  "+ ${habit['value']} XP",
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
-                              if (isChecked)
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  child: Text(
-                                    "+ ${habit['value']} XP",
-                                    style: const TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                          ],
                         );
                       }),
                     ],

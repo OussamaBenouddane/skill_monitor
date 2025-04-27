@@ -13,6 +13,7 @@ class MyApp extends StatelessWidget {
     final ThemeController themeController = Get.find();
 
     return Obx(() => GetMaterialApp(
+          title: 'Skill Monitor',
           themeMode: themeController.isDarkMode.value
               ? ThemeMode.dark
               : ThemeMode.light,
