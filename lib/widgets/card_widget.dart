@@ -44,11 +44,14 @@ class SkillCard extends StatefulWidget {
 }
 
 class _SkillCardState extends State<SkillCard> {
-  bool _canUpdateHabit(String? lastUpdated) {
-    final currentDate = DateTime.now().toIso8601String().substring(0, 10);
-    return lastUpdated == null ||
-        lastUpdated.isEmpty ||
-        lastUpdated != currentDate;
+  String _getCurrentDate() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  bool _isCompletedToday(String? lastUpdated) {
+    final currentDate = _getCurrentDate();
+    return lastUpdated == currentDate;
   }
 
   @override
@@ -132,8 +135,6 @@ class _SkillCardState extends State<SkillCard> {
                         final habitName =
                             habit['name'] as String? ?? 'Unnamed Habit';
                         final lastUpdated = habit['last_updated'] as String?;
-                        final canUpdate = _canUpdateHabit(lastUpdated);
-
                         final isChecked =
                             widget.selectedHabits.contains(habitName);
 
@@ -146,6 +147,7 @@ class _SkillCardState extends State<SkillCard> {
                                 child: Checkbox(
                                   value: isChecked,
                                   onChanged: (bool? value) {
+                                    // Always allow checking/unchecking
                                     widget.onHabitChanged(habitName, value);
                                     widget.onUpdateScore();
                                   },
@@ -156,15 +158,13 @@ class _SkillCardState extends State<SkillCard> {
                                 child: Text(
                                   habitName.toUpperCase(),
                                   style: TextStyle(
-                                    decoration: canUpdate
-                                        ? null
-                                        : (isChecked
-                                            ? TextDecoration.lineThrough
-                                            : null),
+                                    decoration: isChecked
+                                        ? TextDecoration.lineThrough
+                                        : null,
                                   ),
                                 ),
                               ),
-                              if (!canUpdate && isChecked)
+                              if (isChecked)
                                 Container(
                                   margin: const EdgeInsets.only(bottom: 4),
                                   decoration: BoxDecoration(

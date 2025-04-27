@@ -30,60 +30,73 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   }
 
   Future<void> _loadSkillsFromDatabase() async {
-    setState(() => _isLoading = true);
-    const query = '''
-      SELECT s.id as skill_id, s.skill, s.score, s.level,
-             h.name, h.value, h.last_updated
-      FROM skills s
-      LEFT JOIN habits h ON s.id = h.skill_id
-    ''';
+  setState(() => _isLoading = true);
+  const query = '''
+    SELECT s.id as skill_id, s.skill, s.score, s.level,
+           h.name, h.value, h.last_updated
+    FROM skills s
+    LEFT JOIN habits h ON s.id = h.skill_id
+  ''';
 
-    final List<Map<dynamic, dynamic>> data = await dbHelper.readData(query);
-    final Map<int, Map<String, dynamic>> grouped = {};
+  final List<Map<dynamic, dynamic>> data = await dbHelper.readData(query);
+  final Map<int, Map<String, dynamic>> grouped = {};
+  final String today = dbHelper.getCurrentDate(); // Get today's date in YYYY-MM-DD format
 
-    for (var row in data) {
-      final int id = row['skill_id'];
-      if (!grouped.containsKey(id)) {
-        grouped[id] = {
-          "id": id,
-          "name": row['skill'] ?? 'Unnamed Skill',
-          "score": row['score'] ?? 0,
-          "level": row['level']?.clamp(1, 10) ?? 1,
-          "habits": <Map<String, dynamic>>[],
-        };
-      }
-      if (row['name'] != null) {
-        grouped[id]!['habits'].add({
-          "name": row['name'],
-          "value": row['value'] ?? 0,
-          "last_updated": row['last_updated'],
-        });
+  // Clear previous selections
+  _selectedHabits.clear();
+
+  for (var row in data) {
+    final int id = row['skill_id'];
+    if (!grouped.containsKey(id)) {
+      grouped[id] = {
+        "id": id,
+        "name": row['skill'] ?? 'Unnamed Skill',
+        "score": row['score'] ?? 0,
+        "level": row['level']?.clamp(1, 10) ?? 1,
+        "habits": <Map<String, dynamic>>[],
+      };
+    }
+    
+    if (row['name'] != null) {
+      final habitName = row['name'];
+      final lastUpdated = row['last_updated'];
+      
+      grouped[id]!['habits'].add({
+        "name": habitName,
+        "value": row['value'] ?? 0,
+        "last_updated": lastUpdated,
+      });
+      
+      // Check if this habit was updated today and add it to selectedHabits
+      if (lastUpdated == today) {
+        _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
       }
     }
-
-    skills = grouped.values.toList();
-    skills.sort((a, b) {
-      if (a['level'] == 10 && b['level'] != 10) return 1;
-      if (a['level'] != 10 && b['level'] == 10) return -1;
-      return 0;
-    });
-
-    for (var skill in skills) {
-      final id = skill['id'];
-      final controller = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 400),
-      );
-      final animation = Tween<double>(
-        begin: skill['score'].toDouble(),
-        end: skill['score'].toDouble(),
-      ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
-      _animationControllers[id] = controller;
-      _animations[id] = animation;
-    }
-
-    setState(() => _isLoading = false);
   }
+
+  skills = grouped.values.toList();
+  skills.sort((a, b) {
+    if (a['level'] == 10 && b['level'] != 10) return 1;
+    if (a['level'] != 10 && b['level'] == 10) return -1;
+    return 0;
+  });
+
+  for (var skill in skills) {
+    final id = skill['id'];
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    final animation = Tween<double>(
+      begin: skill['score'].toDouble(),
+      end: skill['score'].toDouble(),
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
+    _animationControllers[id] = controller;
+    _animations[id] = animation;
+  }
+
+  setState(() => _isLoading = false);
+}
 
   Future<void> _deleteSkill(int skillId) async {
     setState(() => _isLoading = true);

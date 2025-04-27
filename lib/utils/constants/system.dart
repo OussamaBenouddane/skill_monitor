@@ -1,14 +1,14 @@
 // Centralized constants
 class SystemConstants {
   static const List<int> levelRequirements = [
+    50,
     100,
     200,
-    300,
-    400,
+    250,
+    350,
     500,
     600,
-    700,
-    800,
+    750,
     900,
     1000
   ];
