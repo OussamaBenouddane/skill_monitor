@@ -56,7 +56,7 @@ class _SkillCardState extends State<SkillCard> {
       child: GestureDetector(
         onTap: widget.isMaxed ? null : widget.onTap,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: widget.isMaxed
@@ -69,7 +69,7 @@ class _SkillCardState extends State<SkillCard> {
               // Card Content
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -182,6 +182,7 @@ class _SkillCardState extends State<SkillCard> {
                                 height: 30,
                                 width: 24,
                                 child: Checkbox(
+                                  activeColor: TColors.primary,
                                   value: isChecked,
                                   onChanged: (bool? value) {
                                     // When unchecking, pass resetDate: true
@@ -208,7 +209,7 @@ class _SkillCardState extends State<SkillCard> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
                                   color: habit['value'] > 0
-                                      ? Colors.blue.shade100
+                                      ? TColors.primary.withOpacity(0.2)
                                       : Colors.red.shade100,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -218,7 +219,7 @@ class _SkillCardState extends State<SkillCard> {
                                   "${habit['value']} XP",
                                   style: TextStyle(
                                     color: habit['value'] > 0
-                                        ? Colors.blue
+                                        ? TColors.primary
                                         : Colors.redAccent,
                                     fontWeight: FontWeight.w500,
                                   ),

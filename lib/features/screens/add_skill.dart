@@ -40,7 +40,8 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
       debugPrint('--- INIT HABITS ---');
 
       _habits = widget.existingHabits!.map((habit) {
-        debugPrint('Loaded habit from DB: id=${habit['id']}, name="${habit['name']}", value=${habit['value']}');
+        debugPrint(
+            'Loaded habit from DB: id=${habit['id']}, name="${habit['name']}", value=${habit['value']}');
         return HabitEntry(
           nameController: TextEditingController(text: habit['name']),
           value: habit['value'],
@@ -56,13 +57,15 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
 
   void _addHabit() {
     setState(() {
-      _habits.add(HabitEntry(nameController: TextEditingController(), value: 1));
+      _habits
+          .add(HabitEntry(nameController: TextEditingController(), value: 1));
     });
   }
 
   void _removeHabit(int index) {
     final habit = _habits[index];
-    debugPrint('Removing habit at index $index: id=${habit.id}, name="${habit.nameController.text}"');
+    debugPrint(
+        'Removing habit at index $index: id=${habit.id}, name="${habit.nameController.text}"');
     setState(() {
       if (habit.id != null) {
         _removedHabitIds.add(habit.id!);
@@ -77,13 +80,15 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
     debugPrint('Skill name: "$skillName"');
 
     debugPrint('Habits count (total): ${_habits.length}');
-    final nonEmptyHabits = _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
+    final nonEmptyHabits =
+        _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
     debugPrint('Habits count (non-empty): ${nonEmptyHabits.length}');
     debugPrint('Removed habit IDs: $_removedHabitIds');
 
     if (skillName.isEmpty || nonEmptyHabits.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Skill name and at least one habit are required.')),
+        const SnackBar(
+            content: Text('Skill name and at least one habit are required.')),
       );
       return;
     }
@@ -113,13 +118,15 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
           final value = habit.value;
 
           if (habit.id != null) {
-            debugPrint('Updating habit id=${habit.id}: name="$name", value=$value');
+            debugPrint(
+                'Updating habit id=${habit.id}: name="$name", value=$value');
             await sqlDb.updateData(
               'UPDATE habits SET name = ?, value = ? WHERE id = ? AND skill_id = ?',
               [name, value, habit.id, widget.id],
             );
           } else {
-            debugPrint('Inserting new habit for skill id=${widget.id}: name="$name", value=$value');
+            debugPrint(
+                'Inserting new habit for skill id=${widget.id}: name="$name", value=$value');
             await sqlDb.insertData(
               'INSERT INTO habits (skill_id, name, value, last_updated) VALUES (?, ?, ?, ?)',
               [widget.id, name, value, timestamp],
@@ -143,7 +150,8 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
           final name = habit.nameController.text.trim();
           final value = habit.value;
 
-          debugPrint('Inserting habit for skill id=$skillId: name="$name", value=$value');
+          debugPrint(
+              'Inserting habit for skill id=$skillId: name="$name", value=$value');
           await sqlDb.insertData(
             'INSERT INTO habits (skill_id, name, value, last_updated) VALUES (?, ?, ?, ?)',
             [skillId, name, value, timestamp],
@@ -177,20 +185,18 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
     return Obx(() => Scaffold(
           appBar: AppBar(
             title: Text(isEditing ? 'Edit Skill' : 'Add New Skill'),
-            actions: [
-              IconButton(
-                icon: Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
-                onPressed: () => isDarkMode.toggle(),
-              ),
-            ],
           ),
           backgroundColor: isDarkMode.value ? Colors.black : Colors.white,
           body: _isSaving
               ? const Center(child: CircularProgressIndicator())
               : Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ListView(
+                    physics: const BouncingScrollPhysics(),
                     children: [
+                      const SizedBox(
+                        height: 16,
+                      ),
                       TextField(
                         controller: _skillNameController,
                         decoration: InputDecoration(
@@ -233,7 +239,7 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
                                   onDelete: () => _removeHabit(index),
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),
@@ -247,6 +253,9 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
                       ElevatedButton(
                         onPressed: _finish,
                         child: Text(isEditing ? 'Save Changes' : 'Finish'),
+                      ),
+                      const SizedBox(
+                        height: 16,
                       ),
                     ],
                   ),

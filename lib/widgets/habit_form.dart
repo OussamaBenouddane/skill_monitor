@@ -48,6 +48,8 @@ class HabitForm extends StatelessWidget {
             Text('Value: ${habit.value}'),
             Expanded(
               child: Slider(
+                inactiveColor: Colors.white.withOpacity(0.8),
+                activeColor: const Color(0xFFD69B71),
                 value: habit.value.toDouble(),
                 min: -20,
                 max: 20,
@@ -55,7 +57,8 @@ class HabitForm extends StatelessWidget {
                 label: habit.value.toString(),
                 onChanged: (newValue) {
                   habit.value = newValue.round();
-                  (context as Element).markNeedsBuild(); // force rebuild to reflect slider text
+                  (context as Element)
+                      .markNeedsBuild(); // force rebuild to reflect slider text
                 },
               ),
             ),
@@ -78,4 +81,3 @@ class HabitEntry {
     this.id,
   });
 }
-
