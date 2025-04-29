@@ -5,7 +5,8 @@ import 'package:skill_monitor/sqflite.dart';
 import 'package:skill_monitor/theme_controller.dart';
 import 'package:skill_monitor/utils/constants/system.dart';
 import 'package:skill_monitor/utils/constants/text_strings.dart';
-import 'package:skill_monitor/widgets/card_widget.dart'; // Make sure SkillCard file is correct.
+import 'package:skill_monitor/widgets/card_widget.dart';
+import 'package:skill_monitor/widgets/oops_widget.dart'; // Make sure SkillCard file is correct.
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -59,22 +60,21 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       }
 
       if (row['name'] != null) {
-  final habitId = row['habit_id']; // ✅ NEW
-  final habitName = row['name'];
-  final lastUpdated = row['last_updated'];
+        final habitId = row['habit_id']; // ✅ NEW
+        final habitName = row['name'];
+        final lastUpdated = row['last_updated'];
 
-  grouped[id]!['habits'].add({
-    "id": habitId, // ✅ Include the habit ID
-    "name": habitName,
-    "value": row['value'] ?? 0,
-    "last_updated": lastUpdated,
-  });
+        grouped[id]!['habits'].add({
+          "id": habitId, // ✅ Include the habit ID
+          "name": habitName,
+          "value": row['value'] ?? 0,
+          "last_updated": lastUpdated,
+        });
 
-  if (lastUpdated == today) {
-    _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
-  }
-}
-
+        if (lastUpdated == today) {
+          _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
+        }
+      }
     }
 
     skills = grouped.values.toList();
@@ -218,9 +218,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : skills.isEmpty
-              ? const Center(
-                  child: Text("No skills added yet. Tap + to get started!"),
-                )
+              ? const Oops()
               : ListView.builder(
                   padding: const EdgeInsets.only(top: 12, bottom: 20),
                   itemCount: skills.length,

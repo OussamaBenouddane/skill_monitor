@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skill_monitor/utils/constants/colors.dart';
 import 'package:skill_monitor/utils/constants/system.dart';
+import 'package:skill_monitor/widgets/action_icon.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 class SkillCard extends StatefulWidget {
@@ -54,11 +55,14 @@ class _SkillCardState extends State<SkillCard> {
       curve: Curves.easeInOut,
       child: GestureDetector(
         onTap: widget.isMaxed ? null : widget.onTap,
-        child: Card(
-          elevation: 0,
-          color: widget.isMaxed ? Colors.white : null,
-          shape: RoundedRectangleBorder(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
+            border: widget.isMaxed
+                ? Border.all(color: TColors.primary, width: 2)
+                : null,
+            color: widget.isDark ? Colors.grey.shade800 : Colors.white,
           ),
           child: Stack(
             children: [
@@ -102,18 +106,62 @@ class _SkillCardState extends State<SkillCard> {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize:
+                                MainAxisSize.min, // Minimize vertical space
                             children: [
-                              Text(
-                                widget.name,
-                                style: Theme.of(context).textTheme.titleLarge,
-                                overflow: TextOverflow.ellipsis,
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      widget.name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  widget.isMaxed
+                                      ? const SizedBox()
+                                      : Row(
+                                          children: [
+                                            ActionIcon(
+                                              icon: Icons.edit,
+                                              tooltip: 'Edit Skill',
+                                              onTap: widget.onEdit,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            ActionIcon(
+                                              icon: Icons.delete,
+                                              tooltip: 'Delete Skill',
+                                              onTap: widget.onDelete,
+                                              color: Colors.red,
+                                            ),
+                                          ],
+                                        ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                levelLabel,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              widget.isMaxed
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: TColors.primary,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'You mastered this skill!',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    )
+                                  : Text(
+                                      levelLabel,
+                                      style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ],
                           ),
                         ),
@@ -131,7 +179,7 @@ class _SkillCardState extends State<SkillCard> {
                             Transform.scale(
                               scale: 1.3,
                               child: SizedBox(
-                                height: 24,
+                                height: 30,
                                 width: 24,
                                 child: Checkbox(
                                   value: isChecked,
@@ -159,15 +207,19 @@ class _SkillCardState extends State<SkillCard> {
                               Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade100,
+                                  color: habit['value'] > 0
+                                      ? Colors.blue.shade100
+                                      : Colors.red.shade100,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 child: Text(
-                                  "+ ${habit['value']} XP",
-                                  style: const TextStyle(
-                                    color: Colors.blue,
+                                  "${habit['value']} XP",
+                                  style: TextStyle(
+                                    color: habit['value'] > 0
+                                        ? Colors.blue
+                                        : Colors.redAccent,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -180,34 +232,6 @@ class _SkillCardState extends State<SkillCard> {
                 ),
               ),
               // Edit and Delete floating buttons
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: widget.onEdit,
-                      tooltip: 'Edit Skill',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, size: 20),
-                      onPressed: widget.onDelete,
-                      tooltip: 'Delete Skill',
-                    ),
-                  ],
-                ),
-              ),
-              if (widget.isMaxed)
-                const Positioned(
-                  bottom: 10,
-                  right: 10,
-                  child: Tooltip(
-                    message: 'Skill is fully mastered',
-                    child: Icon(Icons.lock, color: Colors.black45),
-                  ),
-                ),
             ],
           ),
         ),
