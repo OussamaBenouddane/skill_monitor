@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skill_monitor/utils/constants/colors.dart';
 import 'package:skill_monitor/utils/theme/custom_themes/appbar_theme.dart';
 import 'package:skill_monitor/utils/theme/custom_themes/bottom_sheet_theme.dart';
 import 'package:skill_monitor/utils/theme/custom_themes/checkbox_theme.dart';
@@ -15,7 +16,7 @@ class AppTheme {
       useMaterial3: false,
       fontFamily: 'Poppins',
       brightness: Brightness.light,
-      primaryColor: Colors.blueAccent,
+      primaryColor: TColors.primary,
       scaffoldBackgroundColor: Colors.white,
       textTheme: TTextTheme.lightTextTheme,
       chipTheme: TChipTheme.lightChipTheme,
@@ -30,7 +31,7 @@ class AppTheme {
       useMaterial3: false,
       fontFamily: 'Poppins',
       brightness: Brightness.dark,
-      primaryColor: Colors.blueAccent,
+      primaryColor: TColors.primary,
       scaffoldBackgroundColor: const Color(0xff121212),
       textTheme: TTextTheme.darkTextTheme,
       chipTheme: TChipTheme.darkChipTheme,

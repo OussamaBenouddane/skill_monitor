@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skill_monitor/utils/constants/colors.dart';
 
 class TElevatedButtonTheme {
   TElevatedButtonTheme._();
@@ -7,11 +8,11 @@ class TElevatedButtonTheme {
     style: ElevatedButton.styleFrom(
       elevation: 0,
       foregroundColor: Colors.white,
-      backgroundColor: Colors.blue,
+      backgroundColor: TColors.primary,
       disabledForegroundColor: Colors.grey,
       disabledBackgroundColor: Colors.grey,
       side: const BorderSide(
-        color: Colors.blue,
+        color: TColors.primary,
       ),
       padding: const EdgeInsets.all(18),
       textStyle: const TextStyle(
@@ -27,11 +28,11 @@ class TElevatedButtonTheme {
     style: ElevatedButton.styleFrom(
       elevation: 0,
       foregroundColor: Colors.white,
-      backgroundColor: Colors.blue,
+      backgroundColor: TColors.primary,
       disabledForegroundColor: Colors.grey,
       disabledBackgroundColor: Colors.grey,
       side: const BorderSide(
-        color: Colors.blue,
+        color: TColors.primary,
       ),
       padding: const EdgeInsets.all(18),
       textStyle: const TextStyle(
