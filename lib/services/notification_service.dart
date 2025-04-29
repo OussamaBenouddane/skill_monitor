@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 class NotificationService {
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  
+
   final List<String> _motivationalMessages = [
     "Let's check out what progress today brought!",
     "Even if today didn't feel the best, progress surely was made!",
@@ -31,22 +31,23 @@ class NotificationService {
 
   Future<void> initialize() async {
     tz_init.initializeTimeZones();
-    
+
     const AndroidInitializationSettings androidInitializationSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    
+        AndroidInitializationSettings('@mipmap/launcher_icon');
+
     const DarwinInitializationSettings iosInitializationSettings =
         DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    
-    const InitializationSettings initializationSettings = InitializationSettings(
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
       android: androidInitializationSettings,
       iOS: iosInitializationSettings,
     );
-    
+
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -56,12 +57,12 @@ class NotificationService {
 
     // Cancel any existing notifications first to avoid duplicates
     await _flutterLocalNotificationsPlugin.cancelAll();
-    
+
     // Check the last time we set up notifications
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String? lastScheduledDate = prefs.getString('lastScheduledDate');
     String todayDate = _getCurrentDate();
-    
+
     // If no notification has been scheduled today, schedule one
     if (lastScheduledDate != todayDate) {
       await scheduleDailyNotification();
@@ -79,11 +80,12 @@ class NotificationService {
 
   String _getRandomMessage() {
     final random = Random();
-    String message = _motivationalMessages[random.nextInt(_motivationalMessages.length)];
-    
+    String message =
+        _motivationalMessages[random.nextInt(_motivationalMessages.length)];
+
     // Store this message for today
     _saveMessageForToday(message);
-    
+
     return message;
   }
 
@@ -96,7 +98,7 @@ class NotificationService {
   Future<String> _getTodayMessage() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String messageDate = prefs.getString('messageDate') ?? '';
-    
+
     // If message is from today, use it, otherwise get a new one
     if (messageDate == _getCurrentDate()) {
       String savedMessage = prefs.getString('todayMessage') ?? '';
@@ -104,23 +106,23 @@ class NotificationService {
         return savedMessage;
       }
     }
-    
+
     return _getRandomMessage();
   }
 
   Future<void> scheduleDailyNotification() async {
     // Get a fresh message for today
     String message = await _getTodayMessage();
-    
+
     // Cancel any previous notifications to avoid duplicates
     await _flutterLocalNotificationsPlugin.cancelAll();
-    
+
     // Schedule for today at 8 PM
     await _flutterLocalNotificationsPlugin.zonedSchedule(
       0,
       'Skill Monitor',
       message,
-      _nextInstanceOf(const TimeOfDay(hour: 20, minute: 0)),
+      _nextInstanceOf(const TimeOfDay(hour: 15, minute: 0)),
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'skill_monitor_daily',
@@ -136,7 +138,7 @@ class NotificationService {
       matchDateTimeComponents: DateTimeComponents.time,
       payload: 'daily_notification',
     );
-    
+
     debugPrint('Scheduled notification with message: $message');
   }
 
@@ -150,12 +152,12 @@ class NotificationService {
       timeOfDay.hour,
       timeOfDay.minute,
     );
-    
+
     // If it's already past the time today, schedule for tomorrow
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
-    
+
     debugPrint('Next notification scheduled for: $scheduledDate');
     return scheduledDate;
   }
@@ -168,14 +170,15 @@ class NotificationService {
     }
     if (Platform.isIOS) {
       await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
 
   Future<void> showInstantNotification() async {
     String message = await _getTodayMessage();
-    
+
     await _flutterLocalNotificationsPlugin.show(
       1,
       'Skill Monitor',
@@ -192,7 +195,7 @@ class NotificationService {
       ),
       payload: 'instant_notification',
     );
-    
+
     debugPrint('Showing instant notification with message: $message');
   }
 
@@ -201,7 +204,7 @@ class NotificationService {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String lastScheduledDate = prefs.getString('lastScheduledDate') ?? '';
     String todayDate = _getCurrentDate();
-    
+
     // If we haven't scheduled a notification today, do it now
     if (lastScheduledDate != todayDate) {
       await scheduleDailyNotification();
