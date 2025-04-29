@@ -49,8 +49,8 @@ class BackgroundTaskManager {
     // Schedule for the next interval
     await notificationsPlugin.zonedSchedule(
       999, // Use a unique ID for this notification
-      'Background Task',
-      'Running background check',
+      '',
+      '',
       _nextCheckTime(),
       notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

@@ -25,49 +25,72 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
   final RxBool isDarkMode = Get.isDarkMode.obs;
   final SqlDb sqlDb = SqlDb();
 
-  List<HabitEntry> _habits = [HabitEntry()];
-  bool get isEditing => widget.existingSkillName != null;
+  List<HabitEntry> _habits = [];
+  final Set<int> _removedHabitIds = {};
   bool _isSaving = false;
+
+  bool get isEditing => widget.existingSkillName != null;
 
   @override
   void initState() {
     super.initState();
+
     if (isEditing) {
       _skillNameController.text = widget.existingSkillName!;
+      debugPrint('--- INIT HABITS ---');
+
       _habits = widget.existingHabits!.map((habit) {
-        final entry = HabitEntry();
-        entry.nameController.text = habit['name'];
-        entry.value = habit['value'];
-        return entry;
+        debugPrint('Loaded habit from DB: id=${habit['id']}, name="${habit['name']}", value=${habit['value']}');
+        return HabitEntry(
+          nameController: TextEditingController(text: habit['name']),
+          value: habit['value'],
+          id: habit['id'],
+        );
       }).toList();
+    } else {
+      _habits = [
+        HabitEntry(nameController: TextEditingController(), value: 1),
+      ];
     }
   }
 
   void _addHabit() {
-    setState(() => _habits.add(HabitEntry()));
+    setState(() {
+      _habits.add(HabitEntry(nameController: TextEditingController(), value: 1));
+    });
   }
 
-  void _finish() async {
+  void _removeHabit(int index) {
+    final habit = _habits[index];
+    debugPrint('Removing habit at index $index: id=${habit.id}, name="${habit.nameController.text}"');
+    setState(() {
+      if (habit.id != null) {
+        _removedHabitIds.add(habit.id!);
+      }
+      _habits.removeAt(index);
+    });
+  }
+
+  Future<void> _finish() async {
+    debugPrint('--- STARTING FINISH ---');
     final skillName = _skillNameController.text.trim();
-    final nonEmptyHabits =
-        _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
+    debugPrint('Skill name: "$skillName"');
+
+    debugPrint('Habits count (total): ${_habits.length}');
+    final nonEmptyHabits = _habits.where((h) => h.nameController.text.trim().isNotEmpty).toList();
+    debugPrint('Habits count (non-empty): ${nonEmptyHabits.length}');
+    debugPrint('Removed habit IDs: $_removedHabitIds');
 
     if (skillName.isEmpty || nonEmptyHabits.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Skill name and at least one habit are required.'),
-        ),
+        const SnackBar(content: Text('Skill name and at least one habit are required.')),
       );
       return;
     }
 
-    // 🚨 New check: No habit with value 0 allowed
-    bool hasZeroValue = nonEmptyHabits.any((habit) => habit.value == 0);
-    if (hasZeroValue) {
+    if (nonEmptyHabits.any((h) => h.value == 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Habit values must not equal 0.'),
-        ),
+        const SnackBar(content: Text('Habit values must not equal 0.')),
       );
       return;
     }
@@ -75,45 +98,61 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final timestamp = DateTime.now().toIso8601String();
+
       if (isEditing) {
-        // UPDATE existing skill
-        await sqlDb.updateData('''
-        UPDATE skills SET skill = "$skillName" WHERE id = ${widget.id}
-      ''');
+        debugPrint('Mode: EDIT');
+        debugPrint('Updating skill "$skillName"');
+        await sqlDb.updateData(
+          'UPDATE skills SET skill = ? WHERE id = ?',
+          [skillName, widget.id],
+        );
 
-        // DELETE old habits
-        await sqlDb.deleteData('''
-        DELETE FROM habits WHERE skill_id = ${widget.id}
-      ''');
-
-        // INSERT new habits
         for (var habit in nonEmptyHabits) {
-          final habitName = habit.nameController.text.trim();
-          final habitValue = habit.value;
-          await sqlDb.insertData('''
-          INSERT INTO habits (skill_id, name, value, last_updated)
-          VALUES (${widget.id}, "$habitName", $habitValue, "")
-        ''');
+          final name = habit.nameController.text.trim();
+          final value = habit.value;
+
+          if (habit.id != null) {
+            debugPrint('Updating habit id=${habit.id}: name="$name", value=$value');
+            await sqlDb.updateData(
+              'UPDATE habits SET name = ?, value = ? WHERE id = ? AND skill_id = ?',
+              [name, value, habit.id, widget.id],
+            );
+          } else {
+            debugPrint('Inserting new habit for skill id=${widget.id}: name="$name", value=$value');
+            await sqlDb.insertData(
+              'INSERT INTO habits (skill_id, name, value, last_updated) VALUES (?, ?, ?, ?)',
+              [widget.id, name, value, timestamp],
+            );
+          }
+        }
+
+        for (int id in _removedHabitIds) {
+          debugPrint('Deleting removed habit with id=$id');
+          await sqlDb.deleteData('DELETE FROM habits WHERE id = ?', [id]);
         }
       } else {
-        // INSERT new skill - ensure we set initial score and level
-        int skillId = await sqlDb.insertData('''
-        INSERT INTO skills (skill, score, level) 
-        VALUES ("$skillName", 0, 1)
-      ''');
+        debugPrint('Mode: CREATE');
+        final skillId = await sqlDb.insertData(
+          'INSERT INTO skills (skill, score, level) VALUES (?, 0, 1)',
+          [skillName],
+        );
+        debugPrint('Created new skill with id=$skillId');
 
-        // INSERT new habits
         for (var habit in nonEmptyHabits) {
-          final habitName = habit.nameController.text.trim();
-          final habitValue = habit.value;
-          await sqlDb.insertData('''
-          INSERT INTO habits (skill_id, name, value, last_updated)
-          VALUES ($skillId, "$habitName", $habitValue, "")
-        ''');
+          final name = habit.nameController.text.trim();
+          final value = habit.value;
+
+          debugPrint('Inserting habit for skill id=$skillId: name="$name", value=$value');
+          await sqlDb.insertData(
+            'INSERT INTO habits (skill_id, name, value, last_updated) VALUES (?, ?, ?, ?)',
+            [skillId, name, value, timestamp],
+          );
         }
       }
 
-      Get.back(result: true); // let Home know it should refresh
+      debugPrint('--- FINISH SUCCESS ---');
+      Get.back(result: true);
     } catch (e) {
       debugPrint('Error saving skill: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -137,15 +176,12 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
   Widget build(BuildContext context) {
     return Obx(() => Scaffold(
           appBar: AppBar(
-            title: Text(
-              isEditing ? 'Edit Skill' : 'Add New Skill',
-            ),
+            title: Text(isEditing ? 'Edit Skill' : 'Add New Skill'),
             actions: [
               IconButton(
-                icon:
-                    Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
+                icon: Icon(isDarkMode.value ? Icons.light_mode : Icons.dark_mode),
                 onPressed: () => isDarkMode.toggle(),
-              )
+              ),
             ],
           ),
           backgroundColor: isDarkMode.value ? Colors.black : Colors.white,
@@ -164,25 +200,53 @@ class _SkillSetupScreenState extends State<SkillSetupScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      ..._habits.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final habit = entry.value;
-                        return HabitForm(index: index + 1, habit: habit);
-                      }),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: Column(
+                          children: [
+                            ..._habits.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final habit = entry.value;
+                              return AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                transitionBuilder: (child, animation) {
+                                  return SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(1.0, 0.0),
+                                      end: Offset.zero,
+                                    ).animate(CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeOutCubic,
+                                    )),
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: HabitForm(
+                                  key: ValueKey('${habit.id ?? ''}_$index'),
+                                  index: index + 1,
+                                  habit: habit,
+                                  showDelete: _habits.length > 1,
+                                  onDelete: () => _removeHabit(index),
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
                         onPressed: _addHabit,
                         icon: const Icon(Icons.add),
-                        label: const Text(
-                          'Add Habit',
-                        ),
+                        label: const Text('Add Habit'),
                       ),
                       const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: _finish,
-                        child: Text(
-                          isEditing ? 'Save Changes' : 'Finish',
-                        ),
+                        child: Text(isEditing ? 'Save Changes' : 'Finish'),
                       ),
                     ],
                   ),

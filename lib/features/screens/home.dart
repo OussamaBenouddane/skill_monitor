@@ -32,15 +32,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   Future<void> _loadSkillsFromDatabase() async {
     setState(() => _isLoading = true);
     const query = '''
-      SELECT s.id as skill_id, s.skill, s.score, s.level,
-             h.name, h.value, h.last_updated
-      FROM skills s
-      LEFT JOIN habits h ON s.id = h.skill_id
-    ''';
+  SELECT s.id as skill_id, s.skill, s.score, s.level,
+         h.id as habit_id, h.name, h.value, h.last_updated
+  FROM skills s
+  LEFT JOIN habits h ON s.id = h.skill_id
+''';
 
     final List<Map<dynamic, dynamic>> data = await dbHelper.readData(query);
     final Map<int, Map<String, dynamic>> grouped = {};
-    final String today = dbHelper.getCurrentDate(); // Get today's date in YYYY-MM-DD format
+    final String today =
+        dbHelper.getCurrentDate(); // Get today's date in YYYY-MM-DD format
 
     // Clear previous selections
     _selectedHabits.clear();
@@ -56,22 +57,24 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           "habits": <Map<String, dynamic>>[],
         };
       }
-      
+
       if (row['name'] != null) {
-        final habitName = row['name'];
-        final lastUpdated = row['last_updated'];
-        
-        grouped[id]!['habits'].add({
-          "name": habitName,
-          "value": row['value'] ?? 0,
-          "last_updated": lastUpdated,
-        });
-        
-        // Check if this habit was updated today and add it to selectedHabits
-        if (lastUpdated == today) {
-          _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
-        }
-      }
+  final habitId = row['habit_id']; // ✅ NEW
+  final habitName = row['name'];
+  final lastUpdated = row['last_updated'];
+
+  grouped[id]!['habits'].add({
+    "id": habitId, // ✅ Include the habit ID
+    "name": habitName,
+    "value": row['value'] ?? 0,
+    "last_updated": lastUpdated,
+  });
+
+  if (lastUpdated == today) {
+    _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
+  }
+}
+
     }
 
     skills = grouped.values.toList();
@@ -100,8 +103,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
 
   Future<void> _deleteSkill(int skillId) async {
     setState(() => _isLoading = true);
-    await dbHelper.deleteData('DELETE FROM habits WHERE skill_id = $skillId');
-    await dbHelper.deleteData('DELETE FROM skills WHERE id = $skillId');
+    await dbHelper.deleteData(
+      'DELETE FROM habits WHERE skill_id = ?',
+      [skillId],
+    );
+
+    await dbHelper.deleteData(
+      'DELETE FROM skills WHERE id = ?',
+      [skillId],
+    );
+
     _animationControllers[skillId]?.dispose();
     _animationControllers.remove(skillId);
     _animations.remove(skillId);
@@ -111,7 +122,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
 
   Future<void> _updateScoreAndLevel(int skillId, int index) async {
     final selected = _selectedHabits[skillId] ?? {};
-    
+
     final habits = skills[index]['habits'] as List<Map<String, dynamic>>;
     int newScore = 0;
     List<String> updatedHabits = [];
@@ -136,7 +147,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     if (newLevel > 10) newLevel = 10;
 
     await dbHelper.updateData(
-      'UPDATE skills SET score = $currentScore, level = $newLevel WHERE id = $skillId',
+      'UPDATE skills SET score = ?, level = ? WHERE id = ?',
+      [currentScore, newLevel, skillId],
     );
 
     for (String habitName in updatedHabits) {
@@ -167,11 +179,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
 
   Future<void> _resetHabitDate(int skillId, String habitName) async {
     await dbHelper.updateData(
-      '''
-      UPDATE habits 
-      SET last_updated = '' 
-      WHERE skill_id = $skillId AND name = '$habitName'
-      '''
+      'UPDATE habits SET last_updated = ? WHERE skill_id = ? AND name = ?',
+      ['', skillId, habitName],
     );
   }
 
@@ -245,7 +254,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                               onTap: () => setState(() => isExpanded
                                   ? _expandedIndices.remove(index)
                                   : _expandedIndices.add(index)),
-                              onHabitChanged: (habitName, value, {bool resetDate = false}) {
+                              onHabitChanged: (habitName, value,
+                                  {bool resetDate = false}) {
                                 setState(() {
                                   if (value == true) {
                                     _selectedHabits
@@ -289,11 +299,12 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                 }
                               },
                               onEdit: () async {
-                                final result = await Get.to(() => SkillSetupScreen(
-                                      id: skill['id'],
-                                      existingHabits: skill['habits'],
-                                      existingSkillName: skill['name'],
-                                    ));
+                                final result =
+                                    await Get.to(() => SkillSetupScreen(
+                                          id: skill['id'],
+                                          existingHabits: skill['habits'],
+                                          existingSkillName: skill['name'],
+                                        ));
                                 if (result == true) {
                                   await _loadSkillsFromDatabase();
                                   setState(() {});

@@ -8,20 +8,20 @@ class SqlDb {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-
     _database = await _initDb();
     return _database!;
   }
 
   Future<Database> _initDb() async {
-    String path = join(await getDatabasesPath(), 'skill_monitor.db');
+    final path = join(await getDatabasesPath(), 'skill_monitor.db');
     return openDatabase(
       path,
+      version: 1,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE skills (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            skill TEXT,
+            skill TEXT NOT NULL,
             score INTEGER DEFAULT 0,
             level INTEGER DEFAULT 1
           )
@@ -30,43 +30,49 @@ class SqlDb {
         await db.execute('''
           CREATE TABLE habits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            skill_id INTEGER,
-            name TEXT,
-            value INTEGER,
-            last_updated TEXT DEFAULT '', -- Store last updated date for each habit
-            FOREIGN KEY(skill_id) REFERENCES skills(id)
+            skill_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            value INTEGER NOT NULL,
+            last_updated TEXT DEFAULT '',
+            FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
           )
         ''');
       },
-      version: 1,
     );
   }
 
-  // Insert new skill
-  Future<int> insertData(String query) async {
+  /// Raw Insert (unsafe if used directly with user input)
+  Future<int> insertRaw(String query) async {
     final db = await database;
     return await db.rawInsert(query);
   }
 
-  // Read data
-  Future<List<Map<String, dynamic>>> readData(String query) async {
+  /// Safe insert with parameters
+  Future<int> insertData(String query, List<dynamic> args) async {
     final db = await database;
-    return await db.rawQuery(query);
+    return await db.rawInsert(query, args);
   }
 
-  // Update data
-  Future<int> updateData(String query) async {
+  /// Safe read
+  Future<List<Map<String, dynamic>>> readData(String query,
+      [List<dynamic>? args]) async {
     final db = await database;
-    return await db.rawUpdate(query);
+    return await db.rawQuery(query, args);
   }
 
-  // Delete data
-  Future<int> deleteData(String query) async {
+  /// Safe update
+  Future<int> updateData(String query, List<dynamic> args) async {
     final db = await database;
-    return await db.rawDelete(query);
+    return await db.rawUpdate(query, args);
   }
 
-  // Update the `last_updated` date for a habit
+  /// Safe delete
+  Future<int> deleteData(String query, List<dynamic> args) async {
+    final db = await database;
+    return await db.rawDelete(query, args);
+  }
+
+  /// Update the `last_updated` date for a habit
   Future<int> updateHabitDate(int skillId, String habitName) async {
     final db = await database;
     final date = getCurrentDate();
@@ -81,21 +87,29 @@ class SqlDb {
     );
   }
 
-  // Get the current date as a string (YYYY-MM-DD)
-  String getCurrentDate() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
-
+  /// Reset habit date
   Future<int> resetHabitDate(int skillId, String habitName) async {
     final db = await database;
     debugPrint('Resetting habit date for skill $skillId, habit $habitName');
 
     return await db.update(
       'habits',
-      {'last_updated': ''}, // Set to empty string to indicate no date
+      {'last_updated': ''},
       where: 'skill_id = ? AND name = ?',
       whereArgs: [skillId, habitName],
     );
+  }
+
+  /// Get current date in YYYY-MM-DD format
+  String getCurrentDate() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Optional utility for debugging/testing (clear tables)
+  Future<void> resetTables() async {
+    final db = await database;
+    await db.delete('habits');
+    await db.delete('skills');
   }
 }
