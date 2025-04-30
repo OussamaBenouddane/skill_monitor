@@ -162,77 +162,100 @@ class _SkillCardState extends State<SkillCard> {
                                       style: const TextStyle(fontSize: 14),
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                              if (!widget.isMaxed) 
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    '${widget.score} / ${widget.maxValue} XP',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: widget.isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
                       ],
                     ),
                     if (widget.isExpanded) ...[
+                      const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      const SizedBox(height: 8),
                       ...widget.habits.map<Widget>((habit) {
                         final habitName =
                             habit['name'] as String? ?? 'Unnamed Habit';
                         final isChecked =
                             widget.selectedHabits.contains(habitName);
+                        final contribution = habit['contribution'] ?? 0;
+                        final habitValue = habit['value'] ?? 0;
 
-                        return Row(
-                          children: [
-                            Transform.scale(
-                              scale: 1.3,
-                              child: SizedBox(
-                                height: 30,
-                                width: 24,
-                                child: Checkbox(
-                                  activeColor: TColors.primary,
-                                  value: isChecked,
-                                  onChanged: (bool? value) {
-                                    // When unchecking, pass resetDate: true
-                                    widget.onHabitChanged(habitName, value,
-                                        resetDate: value == false);
-                                    widget.onUpdateScore();
-                                  },
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Row(
+                            children: [
+                              Transform.scale(
+                                scale: 1.3,
+                                child: SizedBox(
+                                  height: 30,
+                                  width: 24,
+                                  child: Checkbox(
+                                    activeColor: TColors.primary,
+                                    value: isChecked,
+                                    onChanged: (bool? value) {
+                                      widget.onHabitChanged(habitName, value,
+                                          resetDate: value == false);
+                                    },
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                habitName.toUpperCase(),
-                                style: TextStyle(
-                                  decoration: isChecked
-                                      ? TextDecoration.lineThrough
-                                      : null,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  habitName,
+                                  style: TextStyle(
+                                    decoration: isChecked
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    fontWeight: isChecked 
+                                        ? FontWeight.normal 
+                                        : FontWeight.w500,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (isChecked)
                               Container(
-                                margin: const EdgeInsets.only(bottom: 8),
+                                margin: const EdgeInsets.only(left: 8),
                                 decoration: BoxDecoration(
-                                  color: habit['value'] > 0
-                                      ? TColors.primary.withOpacity(0.2)
+                                  color: habitValue > 0
+                                      ? isChecked && contribution > 0 
+                                          ? TColors.primary.withOpacity(0.2)
+                                          : Colors.grey.shade200
                                       : Colors.red.shade100,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 child: Text(
-                                  "${habit['value']} XP",
+                                  "${habitValue} XP",
                                   style: TextStyle(
-                                    color: habit['value'] > 0
-                                        ? TColors.primary
+                                    color: habitValue > 0
+                                        ? isChecked && contribution > 0
+                                            ? TColors.primary
+                                            : Colors.grey.shade700
                                         : Colors.redAccent,
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
-                          ],
+                            ],
+                          ),
                         );
                       }),
                     ],
                   ],
                 ),
               ),
-              // Edit and Delete floating buttons
             ],
           ),
         ),

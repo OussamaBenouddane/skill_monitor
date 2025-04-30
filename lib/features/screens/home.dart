@@ -21,6 +21,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   List<Map<String, dynamic>> skills = [];
   final Set<int> _expandedIndices = {};
   final Map<int, Set<String>> _selectedHabits = {};
+  // Track habit contributions to scores
+  final Map<int, Map<String, int>> _habitScoreContributions = {};
   final Map<int, AnimationController> _animationControllers = {};
   final Map<int, Animation<double>> _animations = {};
   bool _isLoading = false;
@@ -35,7 +37,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
     const query = '''
   SELECT s.id as skill_id, s.skill, s.score, s.level,
-         h.id as habit_id, h.name, h.value, h.last_updated
+         h.id as habit_id, h.name, h.value, h.last_updated, h.contribution
   FROM skills s
   LEFT JOIN habits h ON s.id = h.skill_id
 ''';
@@ -45,6 +47,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     final String today = dbHelper.getCurrentDate();
 
     _selectedHabits.clear();
+    _habitScoreContributions.clear();
 
     for (var row in data) {
       final int id = row['skill_id'];
@@ -56,19 +59,26 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           "level": row['level']?.clamp(1, 10) ?? 1,
           "habits": <Map<String, dynamic>>[],
         };
+        
+        _habitScoreContributions[id] = {};
       }
 
       if (row['name'] != null) {
         final habitId = row['habit_id'];
         final habitName = row['name'];
         final lastUpdated = row['last_updated'];
+        final contribution = row['contribution'] ?? 0;
 
         grouped[id]!['habits'].add({
           "id": habitId,
           "name": habitName,
           "value": row['value'] ?? 0,
           "last_updated": lastUpdated,
+          "contribution": contribution,
         });
+
+        // Track habit contribution to the skill score
+        _habitScoreContributions[id]![habitName] = contribution;
 
         if (lastUpdated == today) {
           _selectedHabits.putIfAbsent(id, () => <String>{}).add(habitName);
@@ -116,52 +126,85 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _animationControllers.remove(skillId);
     _animations.remove(skillId);
     _selectedHabits.remove(skillId);
+    _habitScoreContributions.remove(skillId);
     await _loadSkillsFromDatabase();
   }
 
-  Future<void> _updateScoreAndLevel(int skillId, int index) async {
-    final selected = _selectedHabits[skillId] ?? {};
-
+  Future<void> _updateScoreAndLevel(int skillId, int index, String habitName, bool isChecked) async {
     final habits = skills[index]['habits'] as List<Map<String, dynamic>>;
-    int newScore = 0;
-    List<String> updatedHabits = [];
-
-    for (var habit in habits) {
-      if (selected.contains(habit['name'])) {
-        newScore += habit['value'] as int;
-        updatedHabits.add(habit['name']);
+    
+    // Find habit in the list
+    final habit = habits.firstWhere(
+      (h) => h['name'] == habitName,
+      orElse: () => {'name': habitName, 'value': 0}
+    );
+    
+    final habitValue = habit['value'] as int;
+    int scoreChange = 0;
+    
+    // Get the current contribution of this habit (if any)
+    final currentContribution = _habitScoreContributions[skillId]?[habitName] ?? 0;
+    
+    // Calculate score change
+    if (isChecked) {
+      // Add points only if there's no current contribution
+      if (currentContribution == 0) {
+        scoreChange = habitValue;
+      }
+    } else {
+      // Remove points if there was a contribution
+      if (currentContribution > 0) {
+        scoreChange = -currentContribution;
       }
     }
-
+    
+    // If no score change, exit early
+    if (scoreChange == 0) return;
+    
+    // Update skill score
     int oldScore = skills[index]['score'];
-    int currentScore = newScore;
+    int newScore = oldScore + scoreChange;
+    if (newScore < 0) newScore = 0;
+    
+    // Calculate level based on accumulated score
+    int totalScore = newScore;
     int newLevel = 1;
 
-    while (newLevel < SystemConstants.levelRequirements.length &&
-        currentScore >= SystemConstants.levelRequirements[newLevel - 1]) {
-      currentScore -= SystemConstants.levelRequirements[newLevel - 1];
-      newLevel++;
+    for (int i = 0; i < SystemConstants.levelRequirements.length; i++) {
+      final requirement = SystemConstants.levelRequirements[i];
+      if (totalScore >= requirement) {
+        totalScore -= requirement;
+        newLevel++;
+      } else {
+        break;
+      }
     }
 
     if (newLevel > 10) newLevel = 10;
 
+    // Update database with new score and level
     await dbHelper.updateData(
       'UPDATE skills SET score = ?, level = ? WHERE id = ?',
-      [currentScore, newLevel, skillId],
+      [newScore, newLevel, skillId],
     );
 
-    for (String habitName in updatedHabits) {
-      await _updateHabitDate(skillId, habitName);
+    // Track contribution for this habit
+    if (isChecked) {
+      await _updateHabitContribution(skillId, habitName, habitValue);
+      _habitScoreContributions[skillId]![habitName] = habitValue;
+    } else {
+      await _updateHabitContribution(skillId, habitName, 0);
+      _habitScoreContributions[skillId]![habitName] = 0;
     }
 
     setState(() {
-      skills[index]['score'] = currentScore;
+      skills[index]['score'] = newScore;
       skills[index]['level'] = newLevel;
 
       _animationControllers[skillId]?.stop();
       _animations[skillId] = Tween<double>(
         begin: oldScore.toDouble(),
-        end: currentScore.toDouble(),
+        end: newScore.toDouble(),
       ).animate(CurvedAnimation(
         parent: _animationControllers[skillId]!,
         curve: Curves.easeInOut,
@@ -174,6 +217,13 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
 
   Future<void> _updateHabitDate(int skillId, String habitName) async {
     await dbHelper.updateHabitDate(skillId, habitName);
+  }
+
+  Future<void> _updateHabitContribution(int skillId, String habitName, int contribution) async {
+    await dbHelper.updateData(
+      'UPDATE habits SET contribution = ? WHERE skill_id = ? AND name = ?',
+      [contribution, skillId, habitName],
+    );
   }
 
   Future<void> _resetHabitDate(int skillId, String habitName) async {
@@ -260,12 +310,13 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                         ? _expandedIndices.remove(index)
                                         : _expandedIndices.add(index)),
                                     onHabitChanged: (habitName, value,
-                                        {bool resetDate = false}) {
+                                        {bool resetDate = false}) async {
                                       setState(() {
                                         if (value == true) {
                                           _selectedHabits
                                               .putIfAbsent(id, () => <String>{})
                                               .add(habitName);
+                                          _updateHabitDate(id, habitName);
                                         } else {
                                           _selectedHabits[id]
                                               ?.remove(habitName);
@@ -274,9 +325,25 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                           }
                                         }
                                       });
+                                      
+                                      // Update score when habit status changes
+                                      await _updateScoreAndLevel(id, index, habitName, value == true);
                                     },
-                                    onUpdateScore: () async {
-                                      await _updateScoreAndLevel(id, index);
+                                    onUpdateScore: () {
+                                      // This is now handled directly in onHabitChanged
+                                    },
+                                    onEdit: () async {
+                                      final result =
+                                          await Get.to(() => SkillSetupScreen(
+                                                id: skill['id'],
+                                                existingHabits: skill['habits'],
+                                                existingSkillName:
+                                                    skill['name'],
+                                              ));
+                                      if (result == true) {
+                                        await _loadSkillsFromDatabase();
+                                        setState(() {});
+                                      }
                                     },
                                     onDelete: () async {
                                       final confirm = await showDialog<bool>(
@@ -301,19 +368,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                                       );
                                       if (confirm == true) {
                                         await _deleteSkill(id);
-                                      }
-                                    },
-                                    onEdit: () async {
-                                      final result =
-                                          await Get.to(() => SkillSetupScreen(
-                                                id: skill['id'],
-                                                existingHabits: skill['habits'],
-                                                existingSkillName:
-                                                    skill['name'],
-                                              ));
-                                      if (result == true) {
-                                        await _loadSkillsFromDatabase();
-                                        setState(() {});
                                       }
                                     },
                                   );
