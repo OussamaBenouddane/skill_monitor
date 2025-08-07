@@ -106,7 +106,6 @@ class HomeScreen extends StatelessWidget {
                             level: skill.level,
                             score: skill.score,
                             habits: habitsForCard,
-                            isExpanded: true, // Always expanded for now
                             selectedHabits: selectedHabits,
                             isMaxed: skill.level >= 10,
                             maxValue:
@@ -115,7 +114,6 @@ class HomeScreen extends StatelessWidget {
                                         .level] // Index is level (0-based offset for next requirement)
                                     : SystemConstants.levelRequirements.last,
 
-                            onTap: () {}, // Handle expansion if needed
                             onHabitChanged: (
                               habitName,
                               checked, {

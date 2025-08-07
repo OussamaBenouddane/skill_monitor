@@ -6,6 +6,7 @@ import '../model/habit_model.dart';
 import '../db/db_helper.dart';
 import '../services/sharedpref_service.dart';
 import '../utils/constants/system.dart';
+import 'skillcard_controller.dart';
 
 class CompositeController extends GetxController
     with GetSingleTickerProviderStateMixin {
@@ -32,6 +33,10 @@ class CompositeController extends GetxController
   static const _animationDuration = Duration(milliseconds: 300);
   static const _animationCurve = Curves.easeIn;
 
+  // Get SkillCard controller instance
+  SkillCardController get skillCardController => 
+      Get.put(SkillCardController(), tag: 'skill_card');
+
   @override
   void onInit() {
     super.onInit();
@@ -43,7 +48,7 @@ class CompositeController extends GetxController
     for (var controller in _animationControllers.values) {
       controller.dispose();
     }
-    super.onClose();
+    super.dispose();
   }
 
   /// Load all skills with habits and handle daily reset
@@ -59,11 +64,21 @@ class CompositeController extends GetxController
         await _applyPendingChanges();
         await _clearDailyData();
         await _prefs.setString('lastOpenDate', today);
+        
+        // Clear expansion states on new day
+        skillCardController.clearAll();
       }
 
       // Load fresh data from database
       final data = await dbHelper.getAllSkillsWithHabits();
       skillWithHabitsList.assignAll(data);
+
+      // Sort skills: maxed skills (level 10) go to the bottom
+      skillWithHabitsList.sort((a, b) {
+        if (a.skill.level == 10 && b.skill.level != 10) return 1;
+        if (a.skill.level != 10 && b.skill.level == 10) return -1;
+        return 0;
+      });
 
       // Store original skill data for preview calculations
       _storeOriginalSkillData();
@@ -345,6 +360,9 @@ class CompositeController extends GetxController
       await _prefs.remove('habit_$key');
     }
 
+    // Remove expansion state for this skill
+    skillCardController.removeSkill(skillId);
+
     await dbHelper.deleteSkill(skillId);
     skillWithHabitsList.removeWhere((s) => s.skill.id == skillId);
     _originalSkillData.remove(skillId);
@@ -385,6 +403,19 @@ class CompositeController extends GetxController
 
     // Update preview after habit deletion
     _updateSkillScorePreview(skillId);
+  }
+
+  /// Utility methods for bulk expansion control
+  void expandAllSkills() {
+    final skillIds = skillWithHabitsList
+        .where((s) => s.skill.level < 10) // Only non-maxed skills
+        .map((s) => s.skill.id!)
+        .toList();
+    skillCardController.expandAll(skillIds);
+  }
+
+  void collapseAllSkills() {
+    skillCardController.collapseAll();
   }
 
   /// ===== Private helpers =====
