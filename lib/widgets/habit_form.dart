@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class HabitForm extends StatelessWidget {
   final int index;
@@ -24,7 +23,6 @@ class HabitForm extends StatelessWidget {
           children: [
             Text(
               'Habit $index',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
             if (showDelete)
@@ -39,7 +37,6 @@ class HabitForm extends StatelessWidget {
           controller: habit.nameController,
           decoration: InputDecoration(
             labelText: 'Habit Name',
-            labelStyle: GoogleFonts.poppins(),
             border: const OutlineInputBorder(),
           ),
         ),
@@ -48,7 +45,7 @@ class HabitForm extends StatelessWidget {
             Text('Value: ${habit.value}'),
             Expanded(
               child: Slider(
-                inactiveColor: Colors.white.withOpacity(0.8),
+                inactiveColor: Colors.white.withValues(alpha: 0.8),
                 activeColor: const Color(0xFFD69B71),
                 value: habit.value.toDouble(),
                 min: -20,
@@ -73,11 +70,13 @@ class HabitForm extends StatelessWidget {
 class HabitEntry {
   final TextEditingController nameController;
   final int? id;
+  final String? lastUpdated;
   int value;
 
   HabitEntry({
     required this.nameController,
     required this.value,
+    this.lastUpdated,
     this.id,
   });
 }

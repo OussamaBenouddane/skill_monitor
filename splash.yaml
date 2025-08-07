@@ -1,13 +1,13 @@
 flutter_native_splash:
+  ios: true
+  android: true
+  web: false
+  image: "assets/images/splash_icon.png"
   color: "#ffffff"
-  color_dark: "#272727"
-  image: "assets/logos/trophyBig.png"
-  image_dark: "assets/logos/trophyBig.png"
-
+  image_dark: "assets/images/splash_icon.png"
+  color_dark: "#ffffff"
   android_12:
+    image: "assets/images/splash_icon.png"
     color: "#ffffff"
-    color_dark: "#272727"
-    image: "assets/logos/trophyBig.png"
-    image_dark: "assets/logos/trophyBig.png"
-  
-  web: False
+    image_dark: "assets/images/splash_icon.png"
+    color_dark: "#ffffff"

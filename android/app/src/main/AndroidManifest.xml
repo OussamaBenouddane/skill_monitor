@@ -7,9 +7,9 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="skill_monitor"
+        android:label="Skill Monitor"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/notif_icon">
 
         
         <activity
