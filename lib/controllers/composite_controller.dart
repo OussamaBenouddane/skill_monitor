@@ -51,6 +51,85 @@ class CompositeController extends GetxController
     super.dispose();
   }
 
+  /// Calculate level and score with proper overflow handling and level protection
+  /// allowLevelDown: true during preview phase, false when applying to database
+  /// originalDbLevel: the level currently saved in database (for preview bounds checking)
+  Map<String, int> calculateLevelAndScore(
+    int currentLevel, 
+    int currentScore, 
+    int scoreChange,
+    {bool allowLevelDown = false, int? originalDbLevel}
+  ) {
+    int newScore = currentScore + scoreChange;
+    int newLevel = currentLevel;
+
+    if (scoreChange > 0) {
+      // Handle positive score changes (level ups with overflow)
+      while (newLevel < SystemConstants.levelRequirements.length - 1) {
+        final currentLevelRequirement = SystemConstants.levelRequirements[newLevel];
+        
+        if (newScore >= currentLevelRequirement) {
+          // Level up and carry over excess score
+          final overflow = newScore - currentLevelRequirement;
+          newLevel++;
+          newScore = overflow;
+          
+          // Check if we can level up again with the overflow
+          if (newLevel < SystemConstants.levelRequirements.length - 1 &&
+              newScore >= SystemConstants.levelRequirements[newLevel]) {
+            continue; // Keep checking for multiple level ups
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+    } else if (scoreChange < 0) {
+      // Handle negative score changes
+      if (allowLevelDown && originalDbLevel != null) {
+        // During preview: allow level downs but not below the database level
+        while (newLevel > originalDbLevel && newScore < 0) {
+          // Go down a level and add the previous level's requirement to score
+          newLevel--;
+          if (newLevel > 0) {
+            newScore += SystemConstants.levelRequirements[newLevel - 1];
+          }
+        }
+        
+        // If we've reached the database level and score is still negative, clamp to 0
+        if (newScore < 0) {
+          newScore = 0;
+          newLevel = originalDbLevel; // Don't go below database level
+        }
+      } else if (allowLevelDown) {
+        // Fallback for cases where originalDbLevel is not provided
+        while (newLevel > 1 && newScore < 0) {
+          newLevel--;
+          if (newLevel > 0) {
+            newScore += SystemConstants.levelRequirements[newLevel - 1];
+          }
+        }
+        
+        if (newScore < 0) {
+          newScore = 0;
+          newLevel = 1;
+        }
+      } else {
+        // After DB save: no level downs, keep original level and clamp score to 0
+        if (newScore < 0) {
+          newScore = 0;
+          newLevel = currentLevel; // Keep the original level, don't allow decrease
+        }
+      }
+    }
+
+    return {
+      'level': newLevel,
+      'score': newScore,
+    };
+  }
+
   /// Load all skills with habits and handle daily reset
   Future<void> loadSkillsWithHabits() async {
     try {
@@ -186,7 +265,7 @@ class CompositeController extends GetxController
     }
   }
 
-  /// Apply changes for a specific skill
+  /// Apply changes for a specific skill (DATABASE UPDATE - NO LEVEL DOWNS)
   Future<void> _applySkillChanges(
     int skillId,
     List<Map<String, dynamic>> changes,
@@ -223,19 +302,18 @@ class CompositeController extends GetxController
       }
     }
 
-    // Update skill score and level
-    int newScore = currentSkill.score + totalScoreChange;
-    if (newScore < 0) newScore = 0;
-
-    int newLevel = currentSkill.level;
-    if (newLevel < SystemConstants.levelRequirements.length &&
-        newScore >= SystemConstants.levelRequirements[newLevel]) {
-      newLevel++;
-    }
+    // Calculate new level and score - NO LEVEL DOWNS when applying to DB
+    final result = calculateLevelAndScore(
+      currentSkill.level, 
+      currentSkill.score, 
+      totalScoreChange,
+      allowLevelDown: false, // No level downs when saving to database
+      // originalDbLevel not needed when allowLevelDown is false
+    );
 
     final updatedSkill = currentSkill.copyWith(
-      score: newScore,
-      level: newLevel,
+      score: result['score']!,
+      level: result['level']!,
     );
 
     await dbHelper.updateSkill(updatedSkill);
@@ -272,7 +350,7 @@ class CompositeController extends GetxController
     _updateSkillScorePreview(skillId);
   }
 
-  /// Update skill score preview based on current habit states
+  /// Update skill score preview based on current habit states (PREVIEW - RESPECTS DB LEVEL)
   void _updateSkillScorePreview(int skillId) {
     final skillIndex = skillWithHabitsList.indexWhere(
       (s) => s.skill.id == skillId,
@@ -294,19 +372,21 @@ class CompositeController extends GetxController
       }
     }
 
-    // Calculate preview score and level based on original data
-    int previewScore = originalSkill.score + scoreChange;
-    if (previewScore < 0) previewScore = 0;
-
-    int previewLevel = originalSkill.level;
-    if (previewLevel < SystemConstants.levelRequirements.length &&
-        previewScore >= SystemConstants.levelRequirements[previewLevel]) {
-      previewLevel++;
-    }
+    // Calculate preview level and score - RESPECTS DATABASE LEVEL as MINIMUM
+    final result = calculateLevelAndScore(
+      originalSkill.level,
+      originalSkill.score,
+      scoreChange,
+      allowLevelDown: true, // Allow level downs during preview
+      originalDbLevel: originalSkill.level, // Pass the database level as minimum
+    );
 
     // Update the skill in the list with preview values
     skillWithHabitsList[skillIndex] = SkillWithHabits(
-      skill: originalSkill.copyWith(score: previewScore, level: previewLevel),
+      skill: originalSkill.copyWith(
+        score: result['score']!,
+        level: result['level']!
+      ),
       habits: skillData.habits,
     );
   }

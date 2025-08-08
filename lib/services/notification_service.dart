@@ -33,8 +33,12 @@ class NotificationService {
   ];
 
   bool _isInitialized = false;
+  bool _permissionsGranted = false;
   static const int _notificationHour = 16; // 4 PM
   static const int _scheduleDays = 30; // Schedule for 30 days
+
+  // Getter to check if notifications are available
+  bool get isNotificationEnabled => _isInitialized && _permissionsGranted;
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -68,31 +72,68 @@ class NotificationService {
         },
       );
 
-      await _requestPermissions();
-      await _scheduleDailyNotifications();
+      // Request permissions and check if granted
+      _permissionsGranted = await _requestPermissions();
+      
+      if (_permissionsGranted) {
+        await _scheduleDailyNotifications();
+        debugPrint('NotificationService initialized successfully with notifications enabled');
+      } else {
+        debugPrint('NotificationService initialized but notifications are disabled (permissions denied)');
+      }
       
       _isInitialized = true;
-      debugPrint('NotificationService initialized successfully');
     } catch (e) {
       debugPrint('Failed to initialize NotificationService: $e');
-      rethrow;
+      // Don't rethrow - let the app continue without notifications
+      _isInitialized = true; // Mark as initialized even if notifications failed
+      _permissionsGranted = false;
     }
   }
 
-  Future<void> _requestPermissions() async {
-    if (Platform.isAndroid) {
-      await Permission.notification.request();
-      await Permission.scheduleExactAlarm.request();
-    }
-    
-    if (Platform.isIOS) {
-      await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+  Future<bool> _requestPermissions() async {
+    try {
+      if (Platform.isAndroid) {
+        final notificationStatus = await Permission.notification.request();
+        final scheduleStatus = await Permission.scheduleExactAlarm.request();
+        
+        bool granted = notificationStatus.isGranted;
+        
+        if (!granted) {
+          debugPrint('Android notification permissions denied');
+          return false;
+        }
+        
+        if (!scheduleStatus.isGranted) {
+          debugPrint('Android schedule exact alarm permission denied');
+          // Still allow notifications even if exact alarm is denied
+        }
+        
+        return granted;
+      }
+      
+      if (Platform.isIOS) {
+        final result = await _flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+            ?.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+        
+        if (result != true) {
+          debugPrint('iOS notification permissions denied');
+          return false;
+        }
+        
+        return true;
+      }
+      
+      // Default for other platforms
+      return false;
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+      return false;
     }
   }
 
@@ -102,59 +143,69 @@ class NotificationService {
   }
 
   Future<void> _scheduleDailyNotifications() async {
-    // Cancel existing notifications first
-    await _flutterLocalNotificationsPlugin.cancelAll();
-
-    final now = tz.TZDateTime.now(tz.local);
-    
-    // Calculate the first notification time
-    tz.TZDateTime firstNotification = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      _notificationHour,
-      0,
-    );
-
-    // If it's already past notification time today, start from tomorrow
-    if (firstNotification.isBefore(now)) {
-      firstNotification = firstNotification.add(const Duration(days: 1));
+    if (!_permissionsGranted) {
+      debugPrint('Cannot schedule notifications - permissions not granted');
+      return;
     }
 
-    // Schedule notifications for the next 30 days
-    for (int i = 0; i < _scheduleDays; i++) {
-      final notificationTime = firstNotification.add(Duration(days: i));
-      final randomMessage = _getRandomMessage();
+    try {
+      // Cancel existing notifications first
+      await _flutterLocalNotificationsPlugin.cancelAll();
+
+      final now = tz.TZDateTime.now(tz.local);
       
-      await _flutterLocalNotificationsPlugin.zonedSchedule(
-        i, // Unique ID for each notification
-        'Skill Monitor',
-        randomMessage,
-        notificationTime,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'skill_monitor_daily',
-            'Daily Reminders',
-            channelDescription: 'Daily notification to check your skill progress',
-            importance: Importance.high,
-            priority: Priority.high,
-            showWhen: true,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'daily_notification',
+      // Calculate the first notification time
+      tz.TZDateTime firstNotification = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        _notificationHour,
+        0,
       );
 
-      debugPrint('Scheduled notification ${i + 1} for: $notificationTime');
-    }
+      // If it's already past notification time today, start from tomorrow
+      if (firstNotification.isBefore(now)) {
+        firstNotification = firstNotification.add(const Duration(days: 1));
+      }
 
-    debugPrint('Successfully scheduled $_scheduleDays daily notifications starting at $_notificationHour:00');
+      // Schedule notifications for the next 30 days
+      for (int i = 0; i < _scheduleDays; i++) {
+        final notificationTime = firstNotification.add(Duration(days: i));
+        final randomMessage = _getRandomMessage();
+        
+        await _flutterLocalNotificationsPlugin.zonedSchedule(
+          i, // Unique ID for each notification
+          'Skill Monitor',
+          randomMessage,
+          notificationTime,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'skill_monitor_daily',
+              'Daily Reminders',
+              channelDescription: 'Daily notification to check your skill progress',
+              importance: Importance.high,
+              priority: Priority.high,
+              showWhen: true,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          payload: 'daily_notification',
+        );
+
+        debugPrint('Scheduled notification ${i + 1} for: $notificationTime');
+      }
+
+      debugPrint('Successfully scheduled $_scheduleDays daily notifications starting at $_notificationHour:00');
+    } catch (e) {
+      debugPrint('Error scheduling notifications: $e');
+      // Don't rethrow - app should continue working
+    }
   }
 
   Future<void> showTestNotification() async {
@@ -163,50 +214,90 @@ class NotificationService {
       return;
     }
 
-    final message = _getRandomMessage();
+    if (!_permissionsGranted) {
+      debugPrint('Cannot show test notification - permissions not granted');
+      return;
+    }
 
-    await _flutterLocalNotificationsPlugin.show(
-      999, // High ID for test notifications
-      'Skill Monitor - Test',
-      message,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'skill_monitor_test',
-          'Test Notifications',
-          channelDescription: 'Test notification channel',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      payload: 'test_notification',
-    );
+    try {
+      final message = _getRandomMessage();
 
-    debugPrint('Test notification shown: $message');
+      await _flutterLocalNotificationsPlugin.show(
+        999, // High ID for test notifications
+        'Skill Monitor - Test',
+        message,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'skill_monitor_test',
+            'Test Notifications',
+            channelDescription: 'Test notification channel',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: 'test_notification',
+      );
+
+      debugPrint('Test notification shown: $message');
+    } catch (e) {
+      debugPrint('Error showing test notification: $e');
+    }
   }
 
-  // Only reschedule if notifications are getting low (optional optimization)
+  // Only reschedule if notifications are getting low and permissions are granted
   Future<void> refreshNotificationsIfNeeded() async {
-    if (!_isInitialized) return;
+    if (!_isInitialized || !_permissionsGranted) {
+      debugPrint('Cannot refresh notifications - service not properly initialized or permissions denied');
+      return;
+    }
 
-    final pendingNotifications = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
-    
-    // If we have less than 7 days of notifications left, reschedule
-    if (pendingNotifications.length < 7) {
-      await _scheduleDailyNotifications();
-      debugPrint('Refreshed notifications - ${pendingNotifications.length} were remaining');
-    } else {
-      debugPrint('Notifications still healthy - ${pendingNotifications.length} pending');
+    try {
+      final pendingNotifications = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
+      
+      // If we have less than 7 days of notifications left, reschedule
+      if (pendingNotifications.length < 7) {
+        await _scheduleDailyNotifications();
+        debugPrint('Refreshed notifications - ${pendingNotifications.length} were remaining');
+      } else {
+        debugPrint('Notifications still healthy - ${pendingNotifications.length} pending');
+      }
+    } catch (e) {
+      debugPrint('Error refreshing notifications: $e');
     }
   }
 
   // Method to check how many notifications are pending (for debugging)
   Future<int> getPendingNotificationCount() async {
-    final pending = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
-    return pending.length;
+    if (!_permissionsGranted) return 0;
+    
+    try {
+      final pending = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
+      return pending.length;
+    } catch (e) {
+      debugPrint('Error getting pending notification count: $e');
+      return 0;
+    }
+  }
+
+  // Method to retry permission request (can be called from settings screen)
+  Future<bool> retryPermissions() async {
+    if (!_isInitialized) {
+      debugPrint('NotificationService not initialized');
+      return false;
+    }
+
+    _permissionsGranted = await _requestPermissions();
+    
+    if (_permissionsGranted) {
+      await _scheduleDailyNotifications();
+      debugPrint('Permissions granted and notifications scheduled');
+    }
+    
+    return _permissionsGranted;
   }
 }
