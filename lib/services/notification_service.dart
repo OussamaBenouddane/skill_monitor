@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_init;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -29,188 +32,181 @@ class NotificationService {
     "Every day is a chance to gain XP in real life!",
   ];
 
+  bool _isInitialized = false;
+  static const int _notificationHour = 16; // 4 PM
+  static const int _scheduleDays = 30; // Schedule for 30 days
+
   Future<void> initialize() async {
-    tz_init.initializeTimeZones();
+    if (_isInitialized) {
+      debugPrint('NotificationService already initialized');
+      return;
+    }
 
-    const AndroidInitializationSettings androidInitializationSettings =
-        AndroidInitializationSettings('@mipmap/notif_icon');
+    try {
+      tz_init.initializeTimeZones();
 
-    const DarwinInitializationSettings iosInitializationSettings =
-        DarwinInitializationSettings(
-          requestAlertPermission: true,
-          requestBadgePermission: true,
-          requestSoundPermission: true,
-        );
+      const AndroidInitializationSettings androidInitializationSettings =
+          AndroidInitializationSettings('@mipmap/notif_icon');
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-          android: androidInitializationSettings,
-          iOS: iosInitializationSettings,
-        );
+      const DarwinInitializationSettings iosInitializationSettings =
+          DarwinInitializationSettings(
+            requestAlertPermission: true,
+            requestBadgePermission: true,
+            requestSoundPermission: true,
+          );
 
-    await _flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        debugPrint('Notification clicked: ${response.payload}');
-      },
-    );
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+            android: androidInitializationSettings,
+            iOS: iosInitializationSettings,
+          );
 
-    // Cancel any existing notifications first to avoid duplicates
-    await _flutterLocalNotificationsPlugin.cancelAll();
+      await _flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          debugPrint('Notification clicked: ${response.payload}');
+        },
+      );
 
-    // Check the last time we set up notifications
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? lastScheduledDate = prefs.getString('lastScheduledDate');
-    String todayDate = _getCurrentDate();
-
-    // If no notification has been scheduled today, schedule one
-    if (lastScheduledDate != todayDate) {
-      await scheduleDailyNotification();
-      await prefs.setString('lastScheduledDate', todayDate);
-      debugPrint('Scheduled new notification for today: $todayDate');
-    } else {
-      debugPrint('Notification already scheduled for today: $todayDate');
+      await _requestPermissions();
+      await _scheduleDailyNotifications();
+      
+      _isInitialized = true;
+      debugPrint('NotificationService initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to initialize NotificationService: $e');
+      rethrow;
     }
   }
 
-  String _getCurrentDate() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  Future<void> _requestPermissions() async {
+    if (Platform.isAndroid) {
+      await Permission.notification.request();
+      await Permission.scheduleExactAlarm.request();
+    }
+    
+    if (Platform.isIOS) {
+      await _flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    }
   }
 
   String _getRandomMessage() {
     final random = Random();
-    String message =
-        _motivationalMessages[random.nextInt(_motivationalMessages.length)];
-
-    // Store this message for today
-    _saveMessageForToday(message);
-
-    return message;
+    return _motivationalMessages[random.nextInt(_motivationalMessages.length)];
   }
 
-  Future<void> _saveMessageForToday(String message) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('todayMessage', message);
-    await prefs.setString('messageDate', _getCurrentDate());
-  }
-
-  Future<String> _getTodayMessage() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    String messageDate = prefs.getString('messageDate') ?? '';
-
-    // If message is from today, use it, otherwise get a new one
-    if (messageDate == _getCurrentDate()) {
-      String savedMessage = prefs.getString('todayMessage') ?? '';
-      if (savedMessage.isNotEmpty) {
-        return savedMessage;
-      }
-    }
-
-    return _getRandomMessage();
-  }
-
-  Future<void> scheduleDailyNotification() async {
-    // Get a fresh message for today
-    String message = await _getTodayMessage();
-
-    // Cancel any previous notifications to avoid duplicates
+  Future<void> _scheduleDailyNotifications() async {
+    // Cancel existing notifications first
     await _flutterLocalNotificationsPlugin.cancelAll();
 
-    // Schedule for today at 8 PM
-    await _flutterLocalNotificationsPlugin.zonedSchedule(
-      0,
-      'Skill Monitor',
-      message,
-      _nextInstanceOf(const TimeOfDay(hour: 15, minute: 0)),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'skill_monitor_daily',
-          'Daily Reminders',
-          channelDescription: 'Daily notification to check your skill progress',
-          importance: Importance.high,
-          priority: Priority.high,
-          showWhen: true,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'daily_notification',
-    );
-
-    debugPrint('Scheduled notification with message: $message');
-  }
-
-  tz.TZDateTime _nextInstanceOf(TimeOfDay timeOfDay) {
     final now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate = tz.TZDateTime(
+    
+    // Calculate the first notification time
+    tz.TZDateTime firstNotification = tz.TZDateTime(
       tz.local,
       now.year,
       now.month,
       now.day,
-      timeOfDay.hour,
-      timeOfDay.minute,
+      _notificationHour,
+      0,
     );
 
-    // If it's already past the time today, schedule for tomorrow
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    // If it's already past notification time today, start from tomorrow
+    if (firstNotification.isBefore(now)) {
+      firstNotification = firstNotification.add(const Duration(days: 1));
     }
 
-    debugPrint('Next notification scheduled for: $scheduledDate');
-    return scheduledDate;
+    // Schedule notifications for the next 30 days
+    for (int i = 0; i < _scheduleDays; i++) {
+      final notificationTime = firstNotification.add(Duration(days: i));
+      final randomMessage = _getRandomMessage();
+      
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        i, // Unique ID for each notification
+        'Skill Monitor',
+        randomMessage,
+        notificationTime,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'skill_monitor_daily',
+            'Daily Reminders',
+            channelDescription: 'Daily notification to check your skill progress',
+            importance: Importance.high,
+            priority: Priority.high,
+            showWhen: true,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'daily_notification',
+      );
+
+      debugPrint('Scheduled notification ${i + 1} for: $notificationTime');
+    }
+
+    debugPrint('Successfully scheduled $_scheduleDays daily notifications starting at $_notificationHour:00');
   }
 
-  Future<void> requestPermissions() async {
-    if (Platform.isAndroid) {
-      if (await Permission.notification.isDenied) {
-        await Permission.notification.request();
-      }
+  Future<void> showTestNotification() async {
+    if (!_isInitialized) {
+      debugPrint('NotificationService not initialized');
+      return;
     }
-    if (Platform.isIOS) {
-      await _flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >()
-          ?.requestPermissions(alert: true, badge: true, sound: true);
-    }
-  }
 
-  Future<void> showInstantNotification() async {
-    String message = await _getTodayMessage();
+    final message = _getRandomMessage();
 
     await _flutterLocalNotificationsPlugin.show(
-      1,
-      'Skill Monitor',
+      999, // High ID for test notifications
+      'Skill Monitor - Test',
       message,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'skill_monitor_instant',
-          'Instant Notifications',
-          channelDescription: 'Test notification',
+          'skill_monitor_test',
+          'Test Notifications',
+          channelDescription: 'Test notification channel',
           importance: Importance.high,
           priority: Priority.high,
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
-      payload: 'instant_notification',
+      payload: 'test_notification',
     );
 
-    debugPrint('Showing instant notification with message: $message');
+    debugPrint('Test notification shown: $message');
   }
 
-  // Check and reschedule notification if needed
-  Future<void> checkAndRescheduleNotification() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    String lastScheduledDate = prefs.getString('lastScheduledDate') ?? '';
-    String todayDate = _getCurrentDate();
+  // Only reschedule if notifications are getting low (optional optimization)
+  Future<void> refreshNotificationsIfNeeded() async {
+    if (!_isInitialized) return;
 
-    // If we haven't scheduled a notification today, do it now
-    if (lastScheduledDate != todayDate) {
-      await scheduleDailyNotification();
-      await prefs.setString('lastScheduledDate', todayDate);
-      debugPrint('Rescheduled notification for new day: $todayDate');
+    final pendingNotifications = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
+    
+    // If we have less than 7 days of notifications left, reschedule
+    if (pendingNotifications.length < 7) {
+      await _scheduleDailyNotifications();
+      debugPrint('Refreshed notifications - ${pendingNotifications.length} were remaining');
+    } else {
+      debugPrint('Notifications still healthy - ${pendingNotifications.length} pending');
     }
+  }
+
+  // Method to check how many notifications are pending (for debugging)
+  Future<int> getPendingNotificationCount() async {
+    final pending = await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
+    return pending.length;
   }
 }
