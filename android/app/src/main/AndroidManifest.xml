@@ -9,7 +9,7 @@
     <application
         android:label="Skill Monitor"
         android:name="${applicationName}"
-        android:icon="@mipmap/notif_icon">
+        android:icon="@mipmap/ic_launcher">
 
         
         <activity
